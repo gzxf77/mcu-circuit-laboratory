@@ -344,10 +344,6 @@ export function App() {
           <div className="quest-content">
             <p className="story">{level.story}</p>
             <div className="goals"><div className="section-heading"><Icon icon={BookOpen} size={18} />任务目标</div>{level.goals.map((goal, index) => <div className="goal" key={goal.id}><span className={'goal-check ' + (checks[index] ? 'passed' : '')}>{checks[index] && <Icon icon={Check} size={13} weight="bold" />}</span><span>{goal.label}</span></div>)}</div>
-            {level.calculations?.length > 0 && <div className="calculation-panel"><strong>计算验算</strong><small>先算出结果，再与探针读数比较</small>{level.calculations.map(item => <label key={item.key}><span>{item.label}</span><span className="calculation-input"><input type="number" min="0" step="any" inputMode="decimal" aria-label={item.label} value={game.answers?.[item.key] ?? ''} onChange={event => {
-              const value = event.target.value;
-              setGame(current => ({ ...current, answers: { ...current.answers, [item.key]: value } }));
-            }} /><em>{item.unit}</em></span></label>)}</div>}
             <div className={'goal-summary ' + (report.success ? 'complete' : '')}><Icon icon={report.success ? Check : Target} size={21} weight="bold" /><strong>{report.success ? '目标全部达成 · ' + (level.model === 'resistor-dc-v1' ? '电路验证通过' : 'LED 已点亮') : '当前完成 ' + checks.filter(Boolean).length + ' / ' + checks.length + ' 项'}</strong><small>操作变化时自动更新</small></div>
           </div>
         </section>

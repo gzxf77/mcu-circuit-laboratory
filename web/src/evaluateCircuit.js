@@ -23,8 +23,6 @@ export function startGame(solved = false, level = defaultLevel) {
     resistorValues: level.model === 'resistor-dc-v1'
       ? Object.fromEntries(level.circuit.resistors.map(id => [id, solved ? level.electrical.referenceOhms[id] : null]))
       : {},
-    answers: level.model === 'resistor-dc-v1' && solved
-      ? { ...level.electrical.referenceAnswers } : {},
     positions: structuredClone(level.board.positions),
   };
 }
@@ -47,13 +45,7 @@ function evaluateResistorDc(game, level, probe) {
     level.circuit.resistors.every(id => game.placed[id]) &&
     resistorResults.every(item => Number.isFinite(item.currentMa) && item.currentMa > 1e-6 && item.powerW <= rated) &&
     Number.isFinite(network.totalCurrentMa) && network.kclErrorMa < 0.01;
-  const calculationsMatch = level.calculations.every(item => {
-    const answer = Number(game.answers?.[item.key]);
-    const actual = network[item.key];
-    return game.answers?.[item.key] !== '' && game.answers?.[item.key] != null &&
-      Number.isFinite(answer) && Number.isFinite(actual) && Math.abs(answer - actual) <= item.tolerance;
-  });
-  const metrics = { ...network, networkSafe, calculationsMatch };
+  const metrics = { ...network, networkSafe };
   const checks = evaluateGoals(level, game, null, normalizeWire, probe, metrics);
   const success = checks.every(Boolean);
   const flowEdges = Object.values(network.wireCurrents).map(item => [item.from, item.to]);
@@ -92,10 +84,6 @@ function evaluateResistorDc(game, level, probe) {
     '节点 A 约 ' + network.nodeAV.toFixed(2) + ' V；总电流约 ' + network.totalCurrentMa.toFixed(2) + ' mA。',
     'R2、R3 的支路电流之和与流经 R1 的总电流一致；R1 压降与节点 A 电压之和为 9 V。',
     '移动探针比较三处电流，再尝试改变一条支路。');
-  if (checks.slice(0, 3).every(Boolean) && networkSafe) return result('calculation-needed', '电路已达标，还需要填写验算结果',
-    '节点 A 与三条支路的读数符合目标。',
-    '计算电源看到的等效电阻，以及 R1 两端的电压；用探针读数核对结果。',
-    '在左侧填写两个计算值，核对 KCL、KVL 与元件功率。');
   return result('target-mismatch', '电路导通，但测量值未达到目标',
     '节点 A 为 ' + network.nodeAV.toFixed(2) + ' V，总电流为 ' + network.totalCurrentMa.toFixed(2) + ' mA。',
     '检查串联电阻与两个并联支路的阻值。' + level.concept,

@@ -4,7 +4,7 @@ import { boardToolIds, componentCatalog } from '../componentCatalog.js';
 
 const knownParts = new Set(Object.keys(componentCatalog));
 const knownTools = new Set(boardToolIds);
-const conditionTypes = new Set(['all', 'any', 'placed', 'wire', 'orientation', 'allowedWires', 'currentUnder', 'currentBetween', 'resistorPowerUnder', 'resistorSelected', 'resistorValuesSelected', 'metricBetween', 'networkSafe', 'calculationsMatch', 'probeAt', 'pathKind', 'goal']);
+const conditionTypes = new Set(['all', 'any', 'placed', 'wire', 'orientation', 'allowedWires', 'currentUnder', 'currentBetween', 'resistorPowerUnder', 'resistorSelected', 'resistorValuesSelected', 'metricBetween', 'networkSafe', 'probeAt', 'pathKind', 'goal']);
 
 const assert = (valid, message) => { if (!valid) throw new Error('Invalid level: ' + message); };
 const endpointPart = endpoint => endpoint.split('.')[0];
@@ -63,8 +63,6 @@ export function defineLevel(level) {
     assert(Array.isArray(electrical.resistorOptionsOhms) && electrical.resistorOptionsOhms.length > 0 && electrical.resistorOptionsOhms.every(value => Number.isFinite(value) && value > 0), 'invalid resistor choices');
     assert(level.circuit?.resistors?.length >= 2 && level.circuit.resistors.every(id => partIds.has(id)), 'resistor parts are required');
     assert(level.circuit.resistors.every(id => Number.isFinite(electrical.referenceOhms?.[id]) && electrical.referenceOhms[id] > 0), 'reference resistor values are required');
-    assert(Array.isArray(level.calculations) && level.calculations.every(item => typeof item.key === 'string' && typeof item.label === 'string' && Number.isFinite(item.tolerance) && item.tolerance > 0), 'calculation prompts are required');
-    assert(level.calculations.every(item => Number.isFinite(electrical.referenceAnswers?.[item.key])), 'reference answers are required');
     assert(partIds.has(level.circuit.source) && partIds.has(level.circuit.ground), 'source and ground are required');
     assert(partIds.has(endpointPart(level.circuit.nodeA)) && validEndpoint(level.circuit.nodeA), 'node A endpoint is required');
     assert(level.board?.positions && [...partIds].every(id => Number.isFinite(level.board.positions[id]?.x) && Number.isFinite(level.board.positions[id]?.y)), 'every part needs a board position');

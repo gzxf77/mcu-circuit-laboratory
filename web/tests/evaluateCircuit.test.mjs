@@ -78,16 +78,12 @@ test('wrong component values remain live but fail the numerical goals', () => {
   near(report.network.nodeAV, 3.6);
 });
 
-test('a correct circuit still needs the learner to verify equivalent resistance and R1 drop', () => {
+test('a correct circuit clears without typed calculations', () => {
   const game = startGame(true);
-  game.answers = {};
-  let report = evaluateCircuit(game);
-  assert.equal(report.kind, 'calculation-needed');
-  assert.deepEqual(report.checks, [true, true, true, false]);
-  game.answers = { equivalentOhms: '2000', r1DropV: '3.0' };
-  assert.equal(evaluateCircuit(game).success, false);
-  game.answers.r1DropV = '4.5';
-  report = evaluateCircuit(game);
+  const report = evaluateCircuit(game);
+  assert.equal('answers' in game, false);
+  assert.equal(report.kind, 'success');
+  assert.deepEqual(report.checks, [true, true, true, true]);
   assert.equal(report.success, true);
 });
 

@@ -53,10 +53,6 @@ export const levels = Object.freeze({
     id: 1, model: 'resistor-dc-v1', title: '分流节点', chapter: '第一章 · 电路基础', chapterSubtitle: '串并联与节点电流',
     story: '电源、节点 A 和 GND 已固定在搭建区。选择并放置 R1、R2、R3：让 R1 连接电源与 A，让 R2、R3 分别从 A 接地。先预测节点 A 的电压，再接线测量。',
     concept: '用串并联等效电阻求总电流；同一节点的电压相同，流入节点的电流等于流出的电流。R1 两端压降与节点 A 电压之和应为 9 V。',
-    calculations: [
-      { key: 'equivalentOhms', label: '预测电源看到的等效电阻', unit: 'Ω', tolerance: 20 },
-      { key: 'r1DropV', label: '预测 R1 两端的电压', unit: 'V', tolerance: 0.05 },
-    ],
     experiments: ['交换 R2、R3 的阻值，比较支路电流。', '断开一条支路，观察节点电压和总电流如何变化。', '比较三只电阻的耗散功率。'],
     initialReversed: false,
     board: { fixedParts: ['power', 'nodeA', 'ground'], positions: {
@@ -72,7 +68,6 @@ export const levels = Object.freeze({
     electrical: {
       sourceV: 9, resistorOptionsOhms: [470, 1000, 1500, 2000, 2200, 3300, 4700],
       referenceOhms: { r1: 1000, r2: 2000, r3: 2000 },
-      referenceAnswers: { equivalentOhms: 2000, r1DropV: 4.5 },
       resistorRatedPowerW: 0.25,
     },
     parts: [
@@ -95,8 +90,8 @@ export const levels = Object.freeze({
         { metricBetween: { key: 'r2CurrentMa', min: 2.15, max: 2.35 } },
         { metricBetween: { key: 'r3CurrentMa', min: 2.15, max: 2.35 } },
       ] } },
-      { id: 'safe', label: '填写等效电阻与 R1 压降，核对 KCL、KVL 和元件功率', when: { all: [
-        { goal: 'parts' }, { goal: 'voltage' }, { goal: 'currents' }, { networkSafe: true }, { calculationsMatch: true },
+      { id: 'safe', label: '三只电阻安全导通，功率低于额定值', when: { all: [
+        { goal: 'parts' }, { goal: 'voltage' }, { goal: 'currents' }, { networkSafe: true },
       ] } },
     ],
   }),

@@ -34,7 +34,6 @@ export function evaluateGoals(level, game, currentPath, normalizeWire, probe = n
       return Number.isFinite(value) && value >= condition.metricBetween.min && value <= condition.metricBetween.max;
     }
     if (condition.networkSafe) return context?.networkSafe === true;
-    if (condition.calculationsMatch) return context?.calculationsMatch === true;
     if (condition.probeAt) return probe?.target === condition.probeAt && game.placed[condition.probeAt.split('.')[0]];
     if (condition.pathKind) return currentPath?.kind === condition.pathKind;
     if (condition.goal) return evaluateGoal(condition.goal);
