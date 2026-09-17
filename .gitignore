@@ -1,0 +1,20 @@
+.DS_Store
+**/.DS_Store
+
+# Installed dependencies and generated output
+web/node_modules/
+web/dist/
+web/coverage/
+
+# Local configuration and logs
+.env
+.env.*
+!.env.example
+web/.env
+web/.env.*
+!web/.env.example
+*.log
+
+# Editor files
+.idea/
+.vscode/
