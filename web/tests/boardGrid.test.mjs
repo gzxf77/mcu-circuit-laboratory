@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { boardGrid, clientPointInSvg, geometryWireKey, snapComponentPosition, wireRoute } from '../src/circuitGeometry.js';
+import { boardGrid, clientPointInSvg, geometryWireKey, pinPosition, snapComponentPosition, terminalAtPoint, wireRoute } from '../src/circuitGeometry.js';
+import { startGame } from '../src/evaluateCircuit.js';
 
 test('inventory drop uses the rendered board bounds and zoomed viewBox', () => {
   assert.deepEqual(
@@ -21,6 +22,19 @@ test('component movement and placement snap to the same holes as the board patte
   const edge = snapComponentPosition('mcu', { x: 9999, y: -9999 });
   assert.ok(edge.x <= 685 && edge.y >= 260);
   assert.equal((edge.x - boardGrid.offset) % boardGrid.step, 0);
+});
+
+test('dragged wire finds only nearby placed terminals at the pointer release', () => {
+  const game = startGame(false);
+  game.placed.r1 = true;
+  game.placed.power = true;
+  const start = pinPosition(game, 'r1.a');
+  const target = pinPosition(game, 'power');
+  assert.equal(terminalAtPoint(game, { x: target.x + 8, y: target.y - 6 }, 'r1.a'), 'power');
+  assert.equal(terminalAtPoint(game, start, 'r1.a'), null);
+  assert.equal(terminalAtPoint(game, { x: target.x + 40, y: target.y }, 'r1.a'), null);
+  game.placed.power = false;
+  assert.equal(terminalAtPoint(game, target, 'r1.a'), null);
 });
 
 test('a right terminal exits right before routing to a component placed on its left', () => {

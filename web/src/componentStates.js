@@ -31,6 +31,20 @@ export const componentStateModels = Object.freeze({
 });
 
 export function resolveComponentStates(game, level, report) {
+  if (level.model === 'resistor-dc-v1') return Object.fromEntries(level.parts
+    .filter(part => Object.hasOwn(game.placed, part.id))
+    .map(part => {
+      const result = report.network?.resistorResults[part.id];
+      if (!result) return [part.id, { state: game.placed[part.id] ? 'normal' : 'unplaced' }];
+      const currentMa = result.currentMa || 0;
+      return [part.id, {
+        state: !game.placed[part.id] ? 'unplaced'
+          : result.powerW > level.electrical.resistorRatedPowerW ? 'overload'
+            : currentMa > 0 ? 'conducting' : 'normal',
+        currentMa, powerW: result.powerW || 0, direction: result.direction,
+        ratedPowerW: level.electrical.resistorRatedPowerW,
+      }];
+    }));
   return Object.fromEntries(level.parts
     .filter(part => Object.hasOwn(game.placed, part.id))
     .map(part => [part.id, componentStateModels[part.id]?.({ game, level, report }) ||

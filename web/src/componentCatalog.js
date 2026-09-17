@@ -9,7 +9,12 @@ export const componentCatalog = Object.freeze({
   },
   power: { visualBounds: [-45, 45, -90, 20], terminals: { power: { x: 0, y: 0 } } },
   ground: { visualBounds: [-48, 48, -12, 95], terminals: { ground: { x: 0, y: 0 } } },
+  nodeA: { visualBounds: [-30, 30, -48, 30], terminals: { nodeA: { x: 0, y: 0 } } },
   resistor: { visualBounds: [-72, 72, -60, 24], terminals: { 'resistor.a': { x: -70, y: 0 }, 'resistor.b': { x: 70, y: 0 } } },
+  ...Object.fromEntries(['r1', 'r2', 'r3'].map(id => [id, {
+    visualBounds: [-72, 72, -60, 24],
+    terminals: { [`${id}.a`]: { x: -70, y: 0 }, [`${id}.b`]: { x: 70, y: 0 } },
+  }])),
   led: { visualBounds: [-63, 63, -56, 78], terminals: { 'led.a': { x: -61, y: 0 }, 'led.b': { x: 61, y: 0 } } },
 });
 

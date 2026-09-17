@@ -4,7 +4,7 @@ import { boardToolIds, componentCatalog } from '../componentCatalog.js';
 
 const knownParts = new Set(Object.keys(componentCatalog));
 const knownTools = new Set(boardToolIds);
-const conditionTypes = new Set(['all', 'any', 'placed', 'wire', 'orientation', 'allowedWires', 'currentUnder', 'currentBetween', 'resistorPowerUnder', 'resistorSelected', 'probeAt', 'pathKind', 'goal']);
+const conditionTypes = new Set(['all', 'any', 'placed', 'wire', 'orientation', 'allowedWires', 'currentUnder', 'currentBetween', 'resistorPowerUnder', 'resistorSelected', 'resistorValuesSelected', 'metricBetween', 'networkSafe', 'calculationsMatch', 'probeAt', 'pathKind', 'goal']);
 
 const assert = (valid, message) => { if (!valid) throw new Error('Invalid level: ' + message); };
 const endpointPart = endpoint => endpoint.split('.')[0];
@@ -33,6 +33,8 @@ function validateCondition(condition, goalIds, partIds) {
     assert(Number.isFinite(value) && value > 0, 'invalid resistor power threshold');
   } else if (type === 'currentBetween') {
     assert(value && Number.isFinite(value.min) && value.min >= 0 && Number.isFinite(value.max) && value.max > value.min, 'invalid current range');
+  } else if (type === 'metricBetween') {
+    assert(value && typeof value.key === 'string' && Number.isFinite(value.min) && Number.isFinite(value.max) && value.max > value.min, 'invalid metric range');
   } else if (type === 'probeAt') {
     assert(typeof value === 'string' && partIds.has(endpointPart(value)) && validEndpoint(value), 'invalid probe target');
   } else if (type === 'pathKind') {
@@ -53,7 +55,30 @@ export function defineLevel(level) {
   assert(level.parts.every(part => knownParts.has(part.id) || knownTools.has(part.id)), 'unsupported part');
   assert(level.parts.some(part => part.id === 'wire'), 'wire tool is required');
   assert(level.parts.some(part => part.id === 'probe'), 'probe tool is required');
+  assert(Array.isArray(level.board?.fixedParts || []) && (level.board?.fixedParts || []).every(id => partIds.has(id)), 'fixed parts must be listed components');
   const electrical = level.electrical;
+  if (level.model === 'resistor-dc-v1') {
+    assert(Number.isFinite(electrical?.sourceV) && electrical.sourceV > 0, 'source voltage must be positive');
+    assert(Number.isFinite(electrical.resistorRatedPowerW) && electrical.resistorRatedPowerW > 0, 'resistor rated power must be positive');
+    assert(Array.isArray(electrical.resistorOptionsOhms) && electrical.resistorOptionsOhms.length > 0 && electrical.resistorOptionsOhms.every(value => Number.isFinite(value) && value > 0), 'invalid resistor choices');
+    assert(level.circuit?.resistors?.length >= 2 && level.circuit.resistors.every(id => partIds.has(id)), 'resistor parts are required');
+    assert(level.circuit.resistors.every(id => Number.isFinite(electrical.referenceOhms?.[id]) && electrical.referenceOhms[id] > 0), 'reference resistor values are required');
+    assert(Array.isArray(level.calculations) && level.calculations.every(item => typeof item.key === 'string' && typeof item.label === 'string' && Number.isFinite(item.tolerance) && item.tolerance > 0), 'calculation prompts are required');
+    assert(level.calculations.every(item => Number.isFinite(electrical.referenceAnswers?.[item.key])), 'reference answers are required');
+    assert(partIds.has(level.circuit.source) && partIds.has(level.circuit.ground), 'source and ground are required');
+    assert(partIds.has(endpointPart(level.circuit.nodeA)) && validEndpoint(level.circuit.nodeA), 'node A endpoint is required');
+    assert(level.board?.positions && [...partIds].every(id => Number.isFinite(level.board.positions[id]?.x) && Number.isFinite(level.board.positions[id]?.y)), 'every part needs a board position');
+    assert(Array.isArray(level.circuit.solutionWires) && level.circuit.solutionWires.length > 0, 'solution wires are required');
+    for (const wire of level.circuit.solutionWires) {
+      const pins = wire.split('-');
+      assert(pins.length === 2 && pins.every(pin => partIds.has(endpointPart(pin)) && validEndpoint(pin)), 'invalid solution wire ' + wire);
+    }
+    assert(Array.isArray(level.goals) && level.goals.length > 0, 'goals are required');
+    const goalIds = new Set(level.goals.map(goal => goal.id));
+    assert(goalIds.size === level.goals.length, 'duplicate goal id');
+    level.goals.forEach(goal => validateCondition(goal.when, goalIds, partIds));
+    return Object.freeze(level);
+  }
   assert(electrical && ['gpioHighV', 'ledForwardV', 'warningCurrentMa'].every(key => Number.isFinite(electrical[key]) && electrical[key] > 0), 'electrical parameters must be positive numbers');
   assert(Number.isFinite(electrical.resistorRatedPowerW) && electrical.resistorRatedPowerW > 0, 'resistor rated power must be positive');
   assert(Number.isFinite(electrical.ledVisualFullScaleMa) && electrical.ledVisualFullScaleMa > 0, 'LED visual full scale must be positive');

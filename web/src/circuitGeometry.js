@@ -31,6 +31,21 @@ export function pinPosition(game, pin) {
   return offset && position ? { x: position.x + offset.x, y: position.y + offset.y } : null;
 }
 
+export function terminalAtPoint(game, point, exclude = null, radius = 23) {
+  let closest = null;
+  let distance = radius;
+  for (const [id, placed] of Object.entries(game.placed)) {
+    if (!placed) continue;
+    for (const pin of Object.keys(componentCatalog[id]?.terminals || {})) {
+      if (pin === exclude) continue;
+      const position = pinPosition(game, pin);
+      const candidate = Math.hypot(point.x - position.x, point.y - position.y);
+      if (candidate < distance) { closest = pin; distance = candidate; }
+    }
+  }
+  return closest;
+}
+
 export const geometryWireKey = (a, b) => [a, b].sort().join('-');
 
 function terminalSide(pin) {

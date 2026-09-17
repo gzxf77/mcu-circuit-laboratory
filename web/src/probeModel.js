@@ -26,7 +26,42 @@ function connectedNodes(game, start) {
 
 const voltageText = voltageV => voltageV === 0 ? '0 V' : voltageV.toFixed(1) + ' V';
 
+function readResistorProbe(game, report, probe, level) {
+  if (!probe) return {
+    pointLabel: '探针未放置', target: null, voltageLabel: '—', voltageV: null,
+    currentLabel: '—', currentMa: null, currentDetail: '拖入探针后读取节点电压和支路电流估算。',
+    waveform: 'idle', detail: '把探针移到端点或导线。',
+  };
+  const target = probe.target;
+  const id = target?.split('.')[0];
+  const pointLabel = target === level.circuit.source ? '电源正端'
+    : target === level.circuit.ground ? 'GND'
+      : target && wirePath(game, level.circuit.nodeA, target) !== null ? '节点 A' + (target === level.circuit.nodeA ? '' : '（' + id.toUpperCase() + (target.endsWith('.a') ? ' 左端' : ' 右端') + '）')
+      : target ? id.toUpperCase() + (target.endsWith('.a') ? ' 左端' : ' 右端') : '未接触电路';
+  const voltageV = target ? report.network.voltageAt(target) : null;
+  const branch = report.network.resistorResults[id];
+  const wireCurrent = probe.wire && report.network.wireCurrents[probe.wire];
+  const currentMa = !target || report.network.shorted ? null
+    : wireCurrent ? wireCurrent.currentMa
+      : probe.wire ? 0
+        : branch?.currentMa ?? (target === level.circuit.source || target === level.circuit.ground
+          ? report.network.totalCurrentMa : 0);
+  return {
+    pointLabel, target,
+    voltageV: Number.isFinite(voltageV) ? voltageV : null,
+    voltageLabel: report.network.shorted ? '短路' : Number.isFinite(voltageV) ? voltageText(voltageV) : target ? '悬空/未求解' : '未接触',
+    currentMa: Number.isFinite(currentMa) ? currentMa : null,
+    currentLabel: !target ? '—' : Number.isFinite(currentMa) ? currentMa.toFixed(2) + ' mA' : '无法确定',
+    currentDetail: !target ? '探针尚未接触导线或端点。' : '电流是该端点所属元件或导线支路的模型估算；理想导线环路中的分流不能唯一确定。',
+    waveform: Number.isFinite(voltageV) && !report.network.shorted ? 'flat' : 'unknown',
+    detail: report.network.shorted ? '电源短路，停止求解。'
+      : Number.isFinite(voltageV) ? '相对 GND 的直流电压；支路电流由欧姆定律与 KCL 求得。'
+        : '该节点未形成可确定电位的连接，不能当作 0 V。',
+  };
+}
+
 export function readProbe(game, report, probe, level = defaultLevel) {
+  if (level.model === 'resistor-dc-v1') return readResistorProbe(game, report, probe, level);
   const c = level.circuit;
   const e = electricalFor(game, level);
   const pointNames = {

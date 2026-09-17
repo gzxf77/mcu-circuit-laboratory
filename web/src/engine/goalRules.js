@@ -1,6 +1,6 @@
 // Small declarative rule vocabulary shared by every level. Level data supplies
 // conditions; no level-specific if/else belongs in the UI.
-export function evaluateGoals(level, game, currentPath, normalizeWire, probe = null) {
+export function evaluateGoals(level, game, currentPath, normalizeWire, probe = null, context = null) {
   const wires = new Set(game.wires.map(normalizeWire));
   const allowedWires = new Set(level.circuit.solutionWires.map(normalizeWire));
   const byId = new Map(level.goals.map(goal => [goal.id, goal]));
@@ -28,6 +28,13 @@ export function evaluateGoals(level, game, currentPath, normalizeWire, probe = n
     if (condition.currentBetween) return currentPath?.currentMa >= condition.currentBetween.min && currentPath.currentMa < condition.currentBetween.max;
     if (condition.resistorPowerUnder) return currentPath?.resistorPowerW <= condition.resistorPowerUnder;
     if (condition.resistorSelected) return Number.isFinite(game.resistorOhms) && game.resistorOhms > 0;
+    if (condition.resistorValuesSelected) return context?.allSelected === true;
+    if (condition.metricBetween) {
+      const value = context?.[condition.metricBetween.key];
+      return Number.isFinite(value) && value >= condition.metricBetween.min && value <= condition.metricBetween.max;
+    }
+    if (condition.networkSafe) return context?.networkSafe === true;
+    if (condition.calculationsMatch) return context?.calculationsMatch === true;
     if (condition.probeAt) return probe?.target === condition.probeAt && game.placed[condition.probeAt.split('.')[0]];
     if (condition.pathKind) return currentPath?.kind === condition.pathKind;
     if (condition.goal) return evaluateGoal(condition.goal);

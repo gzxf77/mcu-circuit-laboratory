@@ -1,93 +1,65 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { snapProbe } from '../src/circuitGeometry.js';
+import { geometryWireKey, pinPosition, snapProbe, wireRoute } from '../src/circuitGeometry.js';
 import { evaluateCircuit, startGame } from '../src/evaluateCircuit.js';
 import { defaultProbe, readProbe } from '../src/probeModel.js';
 
-const withSelectedResistor = (solved = false) => ({ ...startGame(solved), resistorOhms: 330 });
-const measure = (game, target) => readProbe(game, evaluateCircuit(game), { target });
+const measure = (game, target, wire = null) => readProbe(game, evaluateCircuit(game), { target, wire });
 
-test('the level opens empty and an unplaced probe has no trace', () => {
-  const game = startGame(false);
-  assert.ok(Object.values(game.placed).every(value => value === false));
+test('the preset course board shows no probe trace before measurement', () => {
+  const game = startGame();
   assert.equal(defaultProbe.target, null);
   assert.equal(readProbe(game, evaluateCircuit(game), null).waveform, 'idle');
+  assert.equal(snapProbe(game, { x: 175, y: 187 }).target, 'power');
+  assert.equal(snapProbe(game, game.positions.nodeA).target, 'nodeA');
 });
 
-test('a finished circuit exposes distinct power, GPIO, LED and ground traces', () => {
-  const game = withSelectedResistor(true);
-  assert.deepEqual(['power', 'mcu.gpio', 'resistor.a', 'led.a', 'led.b', 'ground'].map(target => {
-    const { voltageV, waveform } = measure(game, target);
-    return [voltageV, waveform];
-  }), [
-    [3.3, 'flat'], [3.3, 'step'], [3.3, 'step'], [2, 'step'], [0, 'flat'], [0, 'flat'],
-  ]);
-  assert.deepEqual(['mcu.gpio', 'resistor.a', 'led.a', 'ground'].map(target => measure(game, target).currentLabel),
-    ['约 3.9 mA', '约 3.9 mA', '约 3.9 mA', '约 3.9 mA']);
+test('probe reads source, node, branch and reference voltages', () => {
+  const game = startGame(true);
+  assert.equal(measure(game, 'power').voltageV, 9);
+  assert.equal(measure(game, 'r1.b').voltageV, 4.5);
+  assert.equal(measure(game, 'nodeA').voltageV, 4.5);
+  assert.equal(measure(game, 'nodeA').pointLabel, '节点 A');
+  assert.match(measure(game, 'r2.a').pointLabel, /节点 A/);
+  assert.equal(measure(game, 'r2.a').voltageV, 4.5);
+  assert.equal(measure(game, 'r2.b').voltageV, 0);
+  assert.equal(measure(game, 'ground').voltageV, 0);
+  assert.equal(measure(game, 'r1.b').currentMa, 4.5);
+  assert.equal(measure(game, 'r2.a').currentMa, 2.25);
+  assert.equal(measure(game, 'r3.a').currentMa, 2.25);
+  assert.equal(measure(game, 'r2.a').waveform, 'flat');
 });
 
-test('a reversed LED has no current and approximately no resistor voltage drop', () => {
-  const game = withSelectedResistor(true);
-  game.reversed = true;
-  const reading = measure(game, 'resistor.b');
-  assert.equal(reading.voltageV, 3.3);
-  assert.equal(reading.waveform, 'step');
-  assert.equal(reading.currentLabel, '0 mA');
+test('wire probe uses its branch current rather than total node current', () => {
+  const game = startGame(true);
+  assert.equal(measure(game, 'nodeA', 'nodeA-r2.a').currentMa, 2.25);
+  assert.equal(measure(game, 'nodeA', 'nodeA-r3.a').currentMa, 2.25);
+  assert.equal(measure(game, 'power', 'power-r1.a').currentMa, 4.5);
 });
 
-test('a GPIO short and an unconnected point do not claim a normal voltage', () => {
-  const shorted = startGame(false);
-  Object.assign(shorted.placed, { mcu: true, power: true, ground: true });
-  shorted.wires.push('power-mcu.vdd', 'mcu.gnd-ground', 'mcu.gpio-ground');
-  assert.equal(measure(shorted, 'mcu.gpio').waveform, 'unknown');
-  assert.equal(measure(shorted, 'mcu.gpio').currentLabel, '无法确定');
-  assert.equal(measure(startGame(false), 'led.a').voltageV, null);
-  const supplyShort = startGame(false);
-  Object.assign(supplyShort.placed, { power: true, ground: true });
-  supplyShort.wires.push('power-ground');
-  assert.equal(measure(supplyShort, 'ground').waveform, 'unknown');
-  assert.equal(measure(supplyShort, 'ground').currentLabel, '无法确定');
+test('floating and shorted nodes never display a measured zero', () => {
+  const game = startGame(true);
+  game.wires = game.wires.filter(wire => wire !== 'power-r1.a');
+  assert.equal(measure(game, 'r1.b').voltageV, 0);
+  assert.equal(measure(game, 'r1.a').voltageV, 0);
+  const detached = startGame();
+  detached.placed.r1 = true;
+  detached.resistorValues.r1 = 1000;
+  assert.equal(measure(detached, 'r1.a').voltageV, null);
+  assert.match(measure(detached, 'r1.a').voltageLabel, /悬空/);
+  const shorted = startGame(true);
+  shorted.wires.push('power-ground');
+  assert.equal(measure(shorted, 'power').voltageV, null);
+  assert.equal(measure(shorted, 'power').voltageLabel, '短路');
 });
 
-test('the probe shows resistor-branch current even before the LED goal is met', () => {
-  const game = withSelectedResistor();
-  Object.assign(game.placed, { mcu: true, power: true, ground: true, resistor: true, led: true });
-  game.wires.push('power-mcu.vdd', 'mcu.gnd-ground', 'mcu.gpio-resistor.a', 'resistor.b-ground');
-  assert.equal(evaluateCircuit(game).success, false);
-  assert.equal(measure(game, 'resistor.b').currentLabel, '约 10.0 mA');
-  assert.equal(measure(game, 'led.a').currentLabel, '0 mA');
-  assert.equal(measure(game, 'led.a').currentMa, 0);
-  assert.equal(readProbe(game, evaluateCircuit(game), { ...defaultProbe }).currentLabel, '—');
-});
-
-test('power and GPIO readings update from the current wiring without an inspect step', () => {
-  const game = startGame(false);
-  game.placed.power = true;
-  game.placed.mcu = true;
-  game.placed.ground = true;
-  assert.equal(measure(game, 'power').voltageV, 3.3);
-  assert.equal(measure(game, 'mcu.gpio').voltageV, null);
-  game.wires.push('power-mcu.vdd', 'mcu.gnd-ground');
-  assert.equal(measure(game, 'mcu.gpio').voltageV, 3.3);
-  assert.equal(measure(game, 'mcu.gpio').waveform, 'step');
-});
-
-test('probe only snaps to components actually placed on the board', () => {
-  const game = startGame(false);
-  assert.equal(snapProbe(game, { x: 276, y: 335 }).target, null);
-  game.placed.mcu = true;
-  assert.equal(snapProbe(game, { x: 276, y: 335 }).target, 'mcu.gpio');
-  game.positions.mcu = { x: 225, y: 385 };
-  assert.equal(snapProbe(game, { x: 325, y: 383 }).target, 'mcu.gpio');
-});
-
-test('the probe snaps to ports and connected wires, and can leave the circuit', () => {
-  const game = withSelectedResistor(true);
-  assert.equal(snapProbe(game, { x: 605, y: 334 }).target, 'led.a');
-  const wire = snapProbe(game, { x: 568, y: 333 });
-  assert.equal(wire.target, 'resistor.b');
-  assert.equal(wire.wire, 'led.a-resistor.b');
-  assert.equal(readProbe(game, evaluateCircuit(game), wire).currentLabel, '约 3.9 mA');
-  assert.equal(wire.y, 332);
-  assert.equal(snapProbe(game, { x: 520, y: 590 }).target, null);
+test('probe snapping follows placed resistor terminals and wires', () => {
+  const game = startGame(true);
+  const pin = pinPosition(game, 'r2.a');
+  assert.equal(snapProbe(game, pin).target, 'r2.a');
+  const route = wireRoute(pinPosition(game, 'nodeA'), pinPosition(game, 'r2.a'), geometryWireKey('nodeA', 'r2.a'), 'nodeA');
+  const wire = snapProbe(game, { x: (route[0].x + route[1].x) / 2, y: (route[0].y + route[1].y) / 2 });
+  assert.ok(wire.target);
+  game.placed.r2 = false;
+  assert.notEqual(snapProbe(game, pin).target, 'r2.a');
 });

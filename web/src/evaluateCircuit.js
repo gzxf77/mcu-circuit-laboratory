@@ -5,25 +5,31 @@ import { resolveComponentStates } from './componentStates.js';
 import { evaluateGoals } from './engine/goalRules.js';
 import { electricalFor, estimateSeriesCurrentMa } from './levelElectrical.js';
 import { defaultLevel } from './levels/catalog.js';
+import { solveResistiveNetwork } from './resistiveNetwork.js';
 
 export const wireKey = (a, b) => [a, b].sort().join('-');
 export const normalizeWire = wire => wireKey(...wire.split('-'));
 // Shared wiring aliases for the introductory GPIO → LED family.
-export const baseWires = defaultLevel.circuit.baseWires;
+export const baseWires = defaultLevel.circuit.baseWires || [];
 export const solutionWires = defaultLevel.circuit.solutionWires;
 
 export function startGame(solved = false, level = defaultLevel) {
   return {
     levelId: level.id,
-    placed: Object.fromEntries(level.parts.filter(part => !['wire', 'probe'].includes(part.id)).map(part => [part.id, solved])),
+    placed: Object.fromEntries(level.parts.filter(part => !['wire', 'probe'].includes(part.id)).map(part => [part.id, solved || Boolean(level.board.fixedParts?.includes(part.id))])),
     wires: solved ? [...level.circuit.solutionWires] : [],
     reversed: solved ? false : level.initialReversed,
     resistorOhms: level.electrical.resistorOhms,
+    resistorValues: level.model === 'resistor-dc-v1'
+      ? Object.fromEntries(level.circuit.resistors.map(id => [id, solved ? level.electrical.referenceOhms[id] : null]))
+      : {},
+    answers: level.model === 'resistor-dc-v1' && solved
+      ? { ...level.electrical.referenceAnswers } : {},
     positions: structuredClone(level.board.positions),
   };
 }
 
-const modelRegistry = { 'gpio-led-series-v1': evaluateGpioLedSeries };
+const modelRegistry = { 'gpio-led-series-v1': evaluateGpioLedSeries, 'resistor-dc-v1': evaluateResistorDc };
 
 export function evaluateCircuit(game, level = defaultLevel, probe = null) {
   const model = modelRegistry[level.model];
@@ -31,6 +37,69 @@ export function evaluateCircuit(game, level = defaultLevel, probe = null) {
   if (game.levelId && game.levelId !== level.id) throw new Error('Game state belongs to a different level');
   const report = model(game, level, probe);
   return { ...report, componentStates: resolveComponentStates(game, level, report) };
+}
+
+function evaluateResistorDc(game, level, probe) {
+  const network = solveResistiveNetwork(game, level);
+  const rated = level.electrical.resistorRatedPowerW;
+  const resistorResults = Object.values(network.resistorResults);
+  const networkSafe = !network.shorted && network.allSelected &&
+    level.circuit.resistors.every(id => game.placed[id]) &&
+    resistorResults.every(item => Number.isFinite(item.currentMa) && item.currentMa > 1e-6 && item.powerW <= rated) &&
+    Number.isFinite(network.totalCurrentMa) && network.kclErrorMa < 0.01;
+  const calculationsMatch = level.calculations.every(item => {
+    const answer = Number(game.answers?.[item.key]);
+    const actual = network[item.key];
+    return game.answers?.[item.key] !== '' && game.answers?.[item.key] != null &&
+      Number.isFinite(answer) && Number.isFinite(actual) && Math.abs(answer - actual) <= item.tolerance;
+  });
+  const metrics = { ...network, networkSafe, calculationsMatch };
+  const checks = evaluateGoals(level, game, null, normalizeWire, probe, metrics);
+  const success = checks.every(Boolean);
+  const flowEdges = Object.values(network.wireCurrents).map(item => [item.from, item.to]);
+  const currentLabel = Number.isFinite(network.totalCurrentMa)
+    ? '约 ' + network.totalCurrentMa.toFixed(2) + ' mA' : '未计算';
+  const currentPath = { kind: 'resistor-network', currentMa: network.totalCurrentMa,
+    currentLabel, flowLabel: level.circuit.flowLabel || '直流电阻网络' };
+  const base = { checks, success, currentLabel, currentPath, flowEdges,
+    network, ledState: 'off', gpioWaveform: 'flat' };
+  const result = (kind, headline, observed, explanation, nextStep) => ({
+    ...base, kind, headline, observed, explanation, nextStep, message: headline,
+  });
+  if (network.shorted) return result('supply-short', '电源正负端被导线短接',
+    '电源输出已停止求解，节点电压与电流不能可靠显示。',
+    '导线形成了绕过电阻的零电阻通路。真实短路电流取决于电源内阻与保护电路。',
+    '检查电源与 GND 之间的直连导线。');
+  const missing = level.parts.filter(part => !['wire', 'probe'].includes(part.id) && !game.placed[part.id]);
+  if (missing.length) return result('missing-part', '元件还没有放齐',
+    '当前仅能计算已闭合的支路。', '本关需要在预设的电源、节点 A、GND 之间放入三只电阻。',
+    '从元件库拖入 ' + missing.map(part => part.label).join('、') + '。');
+  if (!network.allSelected) return result('resistor-unselected', '还有电阻未选阻值',
+    '未定阻值的支路不能求解。', level.concept,
+    '逐只点选 R1、R2、R3，选择阻值。');
+  if (!Number.isFinite(network.nodeAV) || !Number.isFinite(network.totalCurrentMa) ||
+      level.circuit.resistors.some(id => !Number.isFinite(network.resistorResults[id].currentMa) || network.resistorResults[id].currentMa <= 1e-6)) {
+    return result('open-circuit', '网络尚未形成目标回路',
+      '至少一条支路没有可计算的闭合电流。',
+      '电流必须从电源经 R1 到达节点 A，再分别经过 R2、R3 返回 GND。悬空节点不会被当作 0 V。',
+      '沿电源 → R1 → 分叉 → R2/R3 → GND 检查各端点。');
+  }
+  if (resistorResults.some(item => item.powerW > rated)) return result('resistor-overload', '电阻功率超过额定值',
+    '至少一只电阻的耗散功率大于 ' + rated + ' W。',
+    '按 P = I²R 检查每只电阻；实际过载可能导致发热或损坏。',
+    '增大合适的阻值或调整网络连接，重新核对功率。');
+  if (success) return result('success', '节点电压与分流均符合目标',
+    '节点 A 约 ' + network.nodeAV.toFixed(2) + ' V；总电流约 ' + network.totalCurrentMa.toFixed(2) + ' mA。',
+    'R2、R3 的支路电流之和与流经 R1 的总电流一致；R1 压降与节点 A 电压之和为 9 V。',
+    '移动探针比较三处电流，再尝试改变一条支路。');
+  if (checks.slice(0, 3).every(Boolean) && networkSafe) return result('calculation-needed', '电路已达标，还需要填写验算结果',
+    '节点 A 与三条支路的读数符合目标。',
+    '计算电源看到的等效电阻，以及 R1 两端的电压；用探针读数核对结果。',
+    '在左侧填写两个计算值，核对 KCL、KVL 与元件功率。');
+  return result('target-mismatch', '电路导通，但测量值未达到目标',
+    '节点 A 为 ' + network.nodeAV.toFixed(2) + ' V，总电流为 ' + network.totalCurrentMa.toFixed(2) + ' mA。',
+    '检查串联电阻与两个并联支路的阻值。' + level.concept,
+    '先预测改变哪只电阻会使节点电压接近 4.5 V，再用探针核对。');
 }
 
 function evaluateGpioLedSeries(game, level, probe) {
