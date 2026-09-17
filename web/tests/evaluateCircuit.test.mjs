@@ -7,13 +7,13 @@ import { getLevel, makeGpioLedLevel } from '../src/levels/catalog.js';
 const level = getLevel(1);
 const near = (actual, expected) => assert.ok(Math.abs(actual - expected) < 0.001, `${actual} ≈ ${expected}`);
 
-test('the course level opens with fixed reference points and three unselected resistors', () => {
+test('the course level opens with fixed reference points and placeable default resistors', () => {
   const game = startGame();
   assert.deepEqual(level.board.fixedParts, ['power', 'nodeA', 'ground']);
   assert.ok(level.board.fixedParts.every(id => game.placed[id]));
   assert.ok(level.circuit.resistors.every(id => !game.placed[id]));
   assert.deepEqual(game.wires, []);
-  assert.deepEqual(game.resistorValues, { r1: null, r2: null, r3: null });
+  assert.deepEqual(game.resistorValues, { r1: 1000, r2: 1000, r3: 1000 });
   assert.deepEqual(evaluateCircuit(game).checks, [false, false, false, false]);
 });
 
@@ -76,6 +76,15 @@ test('wrong component values remain live but fail the numerical goals', () => {
   assert.equal(report.checks[1], false);
   assert.equal(report.success, false);
   near(report.network.nodeAV, 3.6);
+});
+
+test('default resistors can be adjusted after placement to meet the target', () => {
+  const game = startGame(true);
+  game.resistorValues = { ...level.electrical.defaultOhms };
+  assert.equal(evaluateCircuit(game).success, false);
+  game.resistorValues.r2 = 2000;
+  game.resistorValues.r3 = 2000;
+  assert.equal(evaluateCircuit(game).success, true);
 });
 
 test('a correct circuit clears without typed calculations', () => {

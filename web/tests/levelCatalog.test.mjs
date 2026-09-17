@@ -19,10 +19,10 @@ test('the active first level is a circuit-analysis task with no MCU or LED', () 
 test('each resistor has an independent parameter menu and current state', () => {
   const level = getLevel(1);
   const game = startGame(false, level);
-  assert.equal(componentParameters('r1', level, game).value, '尚未选择阻值');
-  game.resistorValues.r1 = 1000;
   assert.equal(componentParameters('r1', level, game).value, '1000 Ω');
-  assert.equal(componentParameters('r2', level, game).value, '尚未选择阻值');
+  game.resistorValues.r1 = 1500;
+  assert.equal(componentParameters('r1', level, game).value, '1500 Ω');
+  assert.equal(componentParameters('r2', level, game).value, '1000 Ω');
   assert.equal(componentParameters('power', level, game).value, '9.0 V（固定）');
   assert.equal(evaluateCircuit(game, level).success, false);
 });

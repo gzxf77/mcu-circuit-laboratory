@@ -21,7 +21,7 @@ export function startGame(solved = false, level = defaultLevel) {
     reversed: solved ? false : level.initialReversed,
     resistorOhms: level.electrical.resistorOhms,
     resistorValues: level.model === 'resistor-dc-v1'
-      ? Object.fromEntries(level.circuit.resistors.map(id => [id, solved ? level.electrical.referenceOhms[id] : null]))
+      ? Object.fromEntries(level.circuit.resistors.map(id => [id, solved ? level.electrical.referenceOhms[id] : level.electrical.defaultOhms[id]]))
       : {},
     positions: structuredClone(level.board.positions),
   };

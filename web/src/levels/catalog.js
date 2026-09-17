@@ -51,7 +51,7 @@ export function makeGpioLedLevel({
 export const levels = Object.freeze({
   1: defineLevel({
     id: 1, model: 'resistor-dc-v1', title: '分流节点', chapter: '第一章 · 电路基础', chapterSubtitle: '串并联与节点电流',
-    story: '电源、节点 A 和 GND 已固定在搭建区。选择并放置 R1、R2、R3：让 R1 连接电源与 A，让 R2、R3 分别从 A 接地。先预测节点 A 的电压，再接线测量。',
+    story: '电源、节点 A 和 GND 已固定在搭建区。直接拖入 R1、R2、R3：让 R1 连接电源与 A，让 R2、R3 分别从 A 接地。接线后可点击电阻调整阻值，再测量节点 A 的电压。',
     concept: '用串并联等效电阻求总电流；同一节点的电压相同，流入节点的电流等于流出的电流。R1 两端压降与节点 A 电压之和应为 9 V。',
     experiments: ['交换 R2、R3 的阻值，比较支路电流。', '断开一条支路，观察节点电压和总电流如何变化。', '比较三只电阻的耗散功率。'],
     initialReversed: false,
@@ -67,6 +67,7 @@ export const levels = Object.freeze({
     },
     electrical: {
       sourceV: 9, resistorOptionsOhms: [470, 1000, 1500, 2000, 2200, 3300, 4700],
+      defaultOhms: { r1: 1000, r2: 1000, r3: 1000 },
       referenceOhms: { r1: 1000, r2: 2000, r3: 2000 },
       resistorRatedPowerW: 0.25,
     },
@@ -80,7 +81,7 @@ export const levels = Object.freeze({
       { id: 'wire', label: '导线', count: '∞' }, { id: 'probe', label: '探针', count: '×1' },
     ],
     goals: [
-      { id: 'parts', label: '放入 R1、R2、R3 并分别选择阻值', when: { all: [
+      { id: 'parts', label: '放入 R1、R2、R3，按需调整阻值', when: { all: [
         { placed: 'power' }, { placed: 'nodeA' }, { placed: 'ground' }, { placed: 'r1' }, { placed: 'r2' }, { placed: 'r3' },
         { resistorValuesSelected: true },
       ] } },

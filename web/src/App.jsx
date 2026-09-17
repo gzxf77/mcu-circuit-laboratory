@@ -127,7 +127,7 @@ export function App() {
     if (!position) return;
     if (level.board.fixedParts?.includes(id)) return;
     if (id === 'wire') { setMode('wire'); notify('按住一个端点，拖到另一个端点后松开即可连线。'); return; }
-    if ((id === 'resistor' && !game.resistorOhms) || (level.model === 'resistor-dc-v1' && level.circuit.resistors.includes(id) && !game.resistorValues?.[id])) {
+    if (id === 'resistor' && !game.resistorOhms) {
       setInventoryPart(id);
       notify('请先点选电阻并选择阻值，再拖入搭建区。');
       return;

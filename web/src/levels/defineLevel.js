@@ -63,6 +63,7 @@ export function defineLevel(level) {
     assert(Array.isArray(electrical.resistorOptionsOhms) && electrical.resistorOptionsOhms.length > 0 && electrical.resistorOptionsOhms.every(value => Number.isFinite(value) && value > 0), 'invalid resistor choices');
     assert(level.circuit?.resistors?.length >= 2 && level.circuit.resistors.every(id => partIds.has(id)), 'resistor parts are required');
     assert(level.circuit.resistors.every(id => Number.isFinite(electrical.referenceOhms?.[id]) && electrical.referenceOhms[id] > 0), 'reference resistor values are required');
+    assert(level.circuit.resistors.every(id => electrical.resistorOptionsOhms.includes(electrical.defaultOhms?.[id])), 'default resistor values must be available choices');
     assert(partIds.has(level.circuit.source) && partIds.has(level.circuit.ground), 'source and ground are required');
     assert(partIds.has(endpointPart(level.circuit.nodeA)) && validEndpoint(level.circuit.nodeA), 'node A endpoint is required');
     assert(level.board?.positions && [...partIds].every(id => Number.isFinite(level.board.positions[id]?.x) && Number.isFinite(level.board.positions[id]?.y)), 'every part needs a board position');
