@@ -10,7 +10,7 @@ test('the preset course board shows no probe trace before measurement', () => {
   const game = startGame();
   assert.equal(defaultProbe.target, null);
   assert.equal(readProbe(game, evaluateCircuit(game), null).waveform, 'idle');
-  assert.equal(snapProbe(game, { x: 175, y: 187 }).target, 'power');
+  assert.equal(snapProbe(game, game.positions.power).target, 'power');
   assert.equal(snapProbe(game, game.positions.nodeA).target, 'nodeA');
 });
 
@@ -19,21 +19,21 @@ test('probe reads source, node, branch and reference voltages', () => {
   assert.equal(measure(game, 'power').voltageV, 9);
   assert.equal(measure(game, 'r1.b').voltageV, 4.5);
   assert.equal(measure(game, 'nodeA').voltageV, 4.5);
+  assert.equal(measure(game, 'nodeA').currentMa, 4.5);
   assert.equal(measure(game, 'nodeA').pointLabel, '节点 A');
   assert.match(measure(game, 'r2.a').pointLabel, /节点 A/);
   assert.equal(measure(game, 'r2.a').voltageV, 4.5);
   assert.equal(measure(game, 'r2.b').voltageV, 0);
   assert.equal(measure(game, 'ground').voltageV, 0);
   assert.equal(measure(game, 'r1.b').currentMa, 4.5);
-  assert.equal(measure(game, 'r2.a').currentMa, 2.25);
-  assert.equal(measure(game, 'r3.a').currentMa, 2.25);
+  assert.equal(measure(game, 'r2.a').currentMa, 4.5);
   assert.equal(measure(game, 'r2.a').waveform, 'flat');
 });
 
-test('wire probe uses its branch current rather than total node current', () => {
+test('wire probe agrees with the same current on both series segments', () => {
   const game = startGame(true);
-  assert.equal(measure(game, 'nodeA', 'nodeA-r2.a').currentMa, 2.25);
-  assert.equal(measure(game, 'nodeA', 'nodeA-r3.a').currentMa, 2.25);
+  assert.equal(measure(game, 'nodeA', 'nodeA-r1.b').currentMa, 4.5);
+  assert.equal(measure(game, 'nodeA', 'nodeA-r2.a').currentMa, 4.5);
   assert.equal(measure(game, 'power', 'power-r1.a').currentMa, 4.5);
 });
 

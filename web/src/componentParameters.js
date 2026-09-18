@@ -11,7 +11,7 @@ export function componentParameters(id, level, game) {
     };
     if (id === 'power') return { title: '直流电源', value: level.electrical.sourceV.toFixed(1) + ' V（固定）', detail: '相对 GND 提供稳定的直流电压。' };
     if (id === 'ground') return { title: 'GND', value: '0 V 参考点', detail: '所有节点电压均相对 GND 测量。' };
-    if (id === 'nodeA') return { title: '节点 A', value: '待测节点（固定）', detail: 'R1 的输出端与 R2、R3 的输入端都应接到这里；由理想导线连通的端点属于同一节点。' };
+    if (id === 'nodeA') return { title: '节点 A', value: '待测节点（固定）', detail: '此处是两个电阻之间的测点。探针显示相对 GND 的电压；由理想导线连通的端点属于同一节点。' };
     if (id === 'probe') return { title: '探针', value: '节点电压 + 支路电流估算', detail: '拖入搭建区，接触端点或导线查看读数。' };
     if (id === 'wire') return { title: '导线', value: '连线工具', detail: '按住一个端点，拖到另一个端点后松开。' };
   }

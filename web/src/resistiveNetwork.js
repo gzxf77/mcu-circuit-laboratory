@@ -158,9 +158,17 @@ export function solveResistiveNetwork(game, level) {
     vertices.forEach(terminal => { if (!visited.has(terminal)) walk(terminal); });
   }
   const voltageAt = terminal => voltages.get(root(terminal)) ?? null;
+  const nodeAV = voltageAt(level.circuit.nodeA);
+  // A series chain has the same current through every resistor and the source;
+  // the named measuring node must lie strictly between the supply rails.
+  const seriesConducting = !shorted && finite(totalCurrentMa) && totalCurrentMa > 1e-6 &&
+    finite(nodeAV) && nodeAV > 1e-6 && nodeAV < level.electrical.sourceV - 1e-6 &&
+    level.circuit.resistors.length >= 2 &&
+    level.circuit.resistors.every(id => game.placed[id] && finite(resistorResults[id].currentMa) &&
+      Math.abs(resistorResults[id].currentMa - totalCurrentMa) < 0.01);
   return {
     shorted, voltageAt, resistorResults, wireCurrents,
-    nodeAV: voltageAt(level.circuit.nodeA),
+    nodeAV, seriesConducting,
     totalCurrentMa,
     equivalentOhms: finite(totalCurrentMa) && totalCurrentMa > 1e-9
       ? level.electrical.sourceV / (totalCurrentMa / 1000) : null,

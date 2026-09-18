@@ -59,6 +59,12 @@ function Scope({ reading, level }) {
     </svg>
   </div>;
 }
+function CompletionMetrics({ completion, network }) {
+  return <div className="success-metrics">{completion.metrics.map(metric => <div key={metric.label}>
+    <small>{metric.label}</small>
+    <strong className={metric.keys.length > 1 ? 'compound' : undefined}>{metric.keys.map(key => Number.isFinite(network[key]) ? network[key].toFixed(2) : '—').join(' / ')}{metric.unit}</strong>
+  </div>)}</div>;
+}
 export function App() {
   const [level] = useState(() => getLevel(new URLSearchParams(window.location.search).get('level')));
   const [clearedLevels, setClearedLevels] = useState(() => {
@@ -212,7 +218,7 @@ export function App() {
     setInventoryPart(null);
     setFailureOpen(false);
     setSuccessOpen(false);
-    notify(level.board.fixedParts?.length ? '已重置电路。预设端点保留，请重新放入电阻并接线。' : '已重置为空白画布。请从元件库放入所有元件。');
+    notify(level.board.fixedParts?.length ? '已重置电路。预设端点保留，请重新放入元件并接线。' : '已重置为空白画布。请从元件库放入所有元件。');
   };
   const undo = () => {
     clearRunTimers();
@@ -372,7 +378,7 @@ export function App() {
       </section>
       <aside className="right-stack">
         <section className="panel output-panel"><div className="panel-title"><Icon icon={Waveform} size={24} /><h2>实时测量</h2><small>探针与波形同步</small></div><Scope reading={probeReading} level={level} /></section>
-        <section className="panel hint-panel"><button onClick={() => setHintOpen(!hintOpen)} aria-expanded={hintOpen}><span><Icon icon={LightbulbFilament} size={22} />实验提示</span><Icon icon={CaretDown} size={17} className={hintOpen ? 'rotated' : ''} /></button>{hintOpen && <><p>{report.nextStep}</p>{level.experiments?.length > 0 && <div className="experiment-suggestions"><strong>通关后继续试试</strong><ul>{level.experiments.map(item => <li key={item}>{item}</li>)}</ul></div>}</>}</section>
+        <section className="panel hint-panel"><button onClick={() => setHintOpen(!hintOpen)} aria-expanded={hintOpen}><span><Icon icon={LightbulbFilament} size={22} />实验提示</span><Icon icon={CaretDown} size={17} className={hintOpen ? 'rotated' : ''} /></button>{hintOpen && <><p>{report.nextStep}</p>{level.experiments?.length > 0 && <div className="experiment-suggestions"><strong>通关后继续试试</strong><ul>{level.experiments.map(item => <li key={item}>{item}</li>)}</ul></div>}{level.textbook && <p className="textbook-reference">教材对应：{level.textbook}</p>}</>}</section>
       </aside>
     </main>
     {dragPreview && <div className="inventory-drag-preview" style={{ left: dragPreview.x + 14, top: dragPreview.y + 14 }} aria-hidden="true"><InventoryIcon id={dragPreview.id} /><span>{level.parts.find(part => part.id === dragPreview.id)?.label}</span></div>}
@@ -383,11 +389,11 @@ export function App() {
         <div className="success-emblem"><Icon icon={Trophy} size={54} weight="duotone" /></div>
         <div className="success-kicker">LEVEL {levelNumber} · CLEARED</div>
         <h2 id="success-title">{level.title}，通关！</h2>
-        <p id="success-detail">{level.model === 'resistor-dc-v1' ? '节点电压、两条支路电流与功率均满足设计目标；' : 'GPIO0 经限流电阻驱动 LED，'}{level.goals.length} 项任务目标全部达成。</p>
+        <p id="success-detail">{level.completion?.detail || 'GPIO0 经限流电阻驱动 LED，'}{level.goals.length} 项任务目标全部达成。</p>
         {level.model === 'resistor-dc-v1'
-          ? <div className="success-metrics"><div><small>节点 A</small><strong>{report.network.nodeAV.toFixed(2)} V</strong></div><div><small>总电流</small><strong>{report.currentLabel}</strong></div><div><small>R2 / R3 · mA</small><strong>{report.network.r2CurrentMa.toFixed(2)} / {report.network.r3CurrentMa.toFixed(2)}</strong></div></div>
+          ? <CompletionMetrics completion={level.completion} network={report.network} />
           : <div className="success-metrics"><div><small>GPIO 高电平</small><strong>{level.electrical.gpioHighV.toFixed(1)} V</strong></div><div><small>限流电阻</small><strong>{game.resistorOhms} Ω</strong></div><div><small>支路电流</small><strong>{report.currentLabel}</strong></div></div>}
-        <div className="success-note"><Icon icon={Check} size={18} weight="bold" />{level.model === 'resistor-dc-v1' ? 'KCL、KVL 与元件功率均通过检查' : '电流符合本关目标范围，LED 正常点亮'}</div>
+        <div className="success-note"><Icon icon={Check} size={18} weight="bold" />{level.completion?.note || '电流符合本关目标范围，LED 正常点亮'}</div>
         {nextLevel && <button className="success-primary" onClick={() => goToLevel(nextLevel.id)}>进入第 {nextLevel.id} 关 · {nextLevel.title}</button>}
         <button className={nextLevel ? 'success-secondary' : 'success-primary'} onClick={() => setSuccessOpen(false)}>返回电路继续探索</button>
       </section>

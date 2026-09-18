@@ -41,18 +41,26 @@ function readResistorProbe(game, report, probe, level) {
   const voltageV = target ? report.network.voltageAt(target) : null;
   const branch = report.network.resistorResults[id];
   const wireCurrent = probe.wire && report.network.wireCurrents[probe.wire];
+  const touchingCurrents = target && !probe.wire
+    ? Object.entries(report.network.wireCurrents).filter(([wire]) => wire.split('-').includes(target)).map(([, item]) => item.currentMa)
+    : [];
+  const unambiguousNodeCurrent = touchingCurrents.length && touchingCurrents.every(value => Math.abs(value - touchingCurrents[0]) < 0.01)
+    ? touchingCurrents[0] : null;
+  const splitNode = touchingCurrents.length > 1 && unambiguousNodeCurrent === null;
   const currentMa = !target || report.network.shorted ? null
     : wireCurrent ? wireCurrent.currentMa
       : probe.wire ? 0
         : branch?.currentMa ?? (target === level.circuit.source || target === level.circuit.ground
-          ? report.network.totalCurrentMa : 0);
+          ? report.network.totalCurrentMa : splitNode ? null : unambiguousNodeCurrent ?? 0);
   return {
     pointLabel, target,
     voltageV: Number.isFinite(voltageV) ? voltageV : null,
     voltageLabel: report.network.shorted ? '短路' : Number.isFinite(voltageV) ? voltageText(voltageV) : target ? '悬空/未求解' : '未接触',
     currentMa: Number.isFinite(currentMa) ? currentMa : null,
-    currentLabel: !target ? '—' : Number.isFinite(currentMa) ? currentMa.toFixed(2) + ' mA' : '无法确定',
-    currentDetail: !target ? '探针尚未接触导线或端点。' : '电流是该端点所属元件或导线支路的模型估算；理想导线环路中的分流不能唯一确定。',
+    currentLabel: !target ? '—' : splitNode && !probe.wire ? '请选择支路' : Number.isFinite(currentMa) ? currentMa.toFixed(2) + ' mA' : '无法确定',
+    currentDetail: !target ? '探针尚未接触导线或端点。' : splitNode && !probe.wire
+      ? '此节点存在多条不同电流的支路，请把探针移到具体导线查看支路估算。'
+      : '电流是该端点所属元件或导线支路的模型估算；理想导线环路中的分流不能唯一确定。',
     waveform: Number.isFinite(voltageV) && !report.network.shorted ? 'flat' : 'unknown',
     detail: report.network.shorted ? '电源短路，停止求解。'
       : Number.isFinite(voltageV) ? '相对 GND 的直流电压；支路电流由欧姆定律与 KCL 求得。'

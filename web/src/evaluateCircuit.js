@@ -64,30 +64,31 @@ function evaluateResistorDc(game, level, probe) {
     '检查电源与 GND 之间的直连导线。');
   const missing = level.parts.filter(part => !['wire', 'probe'].includes(part.id) && !game.placed[part.id]);
   if (missing.length) return result('missing-part', '元件还没有放齐',
-    '当前仅能计算已闭合的支路。', '本关需要在预设的电源、节点 A、GND 之间放入三只电阻。',
+    '当前仅能计算已闭合的支路。', '先在预设的电源、节点 A、GND 之间放入本关所需电阻。',
     '从元件库拖入 ' + missing.map(part => part.label).join('、') + '。');
   if (!network.allSelected) return result('resistor-unselected', '还有电阻未选阻值',
     '未定阻值的支路不能求解。', level.concept,
-    '逐只点选 R1、R2、R3，选择阻值。');
+    '逐只点选电阻，选择阻值。');
   if (!Number.isFinite(network.nodeAV) || !Number.isFinite(network.totalCurrentMa) ||
       level.circuit.resistors.some(id => !Number.isFinite(network.resistorResults[id].currentMa) || network.resistorResults[id].currentMa <= 1e-6)) {
     return result('open-circuit', '网络尚未形成目标回路',
       '至少一条支路没有可计算的闭合电流。',
-      '电流必须从电源经 R1 到达节点 A，再分别经过 R2、R3 返回 GND。悬空节点不会被当作 0 V。',
-      '沿电源 → R1 → 分叉 → R2/R3 → GND 检查各端点。');
+      '电流必须从电源经过电阻回到 GND。悬空节点不会被当作 0 V。',
+      '沿 ' + (level.circuit.flowLabel || '电源 → 电阻 → GND') + ' 检查各端点。');
   }
   if (resistorResults.some(item => item.powerW > rated)) return result('resistor-overload', '电阻功率超过额定值',
     '至少一只电阻的耗散功率大于 ' + rated + ' W。',
     '按 P = I²R 检查每只电阻；实际过载可能导致发热或损坏。',
     '增大合适的阻值或调整网络连接，重新核对功率。');
-  if (success) return result('success', '节点电压与分流均符合目标',
+  if (success) return result('success', '回路与测量均符合目标',
     '节点 A 约 ' + network.nodeAV.toFixed(2) + ' V；总电流约 ' + network.totalCurrentMa.toFixed(2) + ' mA。',
-    'R2、R3 的支路电流之和与流经 R1 的总电流一致；R1 压降与节点 A 电压之和为 9 V。',
-    '移动探针比较三处电流，再尝试改变一条支路。');
-  return result('target-mismatch', '电路导通，但测量值未达到目标',
+    level.completion?.note || level.concept,
+    '移动探针比较两只电阻的端点，再尝试改变阻值。');
+  const nextGoal = level.goals.find((goal, index) => !checks[index]);
+  return result('target-mismatch', '电路已经导通，继续完成实验',
     '节点 A 为 ' + network.nodeAV.toFixed(2) + ' V，总电流为 ' + network.totalCurrentMa.toFixed(2) + ' mA。',
-    '检查串联电阻与两个并联支路的阻值。' + level.concept,
-    '先预测改变哪只电阻会使节点电压接近 4.5 V，再用探针核对。');
+    level.concept,
+    nextGoal ? '下一步：' + nextGoal.label + '。' : '检查各测点的读数。');
 }
 
 function evaluateGpioLedSeries(game, level, probe) {

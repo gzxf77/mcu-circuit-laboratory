@@ -4,7 +4,7 @@ import { boardToolIds, componentCatalog } from '../componentCatalog.js';
 
 const knownParts = new Set(Object.keys(componentCatalog));
 const knownTools = new Set(boardToolIds);
-const conditionTypes = new Set(['all', 'any', 'placed', 'wire', 'orientation', 'allowedWires', 'currentUnder', 'currentBetween', 'resistorPowerUnder', 'resistorSelected', 'resistorValuesSelected', 'metricBetween', 'networkSafe', 'probeAt', 'pathKind', 'goal']);
+const conditionTypes = new Set(['all', 'any', 'placed', 'wire', 'orientation', 'allowedWires', 'currentUnder', 'currentBetween', 'resistorPowerUnder', 'resistorSelected', 'resistorValuesSelected', 'metricBetween', 'networkSafe', 'seriesConducting', 'probeAt', 'pathKind', 'goal']);
 
 const assert = (valid, message) => { if (!valid) throw new Error('Invalid level: ' + message); };
 const endpointPart = endpoint => endpoint.split('.')[0];
@@ -73,6 +73,10 @@ export function defineLevel(level) {
       assert(pins.length === 2 && pins.every(pin => partIds.has(endpointPart(pin)) && validEndpoint(pin)), 'invalid solution wire ' + wire);
     }
     assert(Array.isArray(level.goals) && level.goals.length > 0, 'goals are required');
+    assert(level.completion && typeof level.completion.detail === 'string' && typeof level.completion.note === 'string', 'completion copy is required');
+    assert(Array.isArray(level.completion.metrics) && level.completion.metrics.every(metric =>
+      typeof metric.label === 'string' && Array.isArray(metric.keys) && metric.keys.length > 0 &&
+      metric.keys.every(key => typeof key === 'string') && typeof metric.unit === 'string'), 'invalid completion metrics');
     const goalIds = new Set(level.goals.map(goal => goal.id));
     assert(goalIds.size === level.goals.length, 'duplicate goal id');
     level.goals.forEach(goal => validateCondition(goal.when, goalIds, partIds));

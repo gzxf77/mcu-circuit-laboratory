@@ -7,11 +7,11 @@ import { componentParameters } from '../src/componentParameters.js';
 test('the active first level is a circuit-analysis task with no MCU or LED', () => {
   assert.deepEqual(levelIds, [1]);
   assert.equal(getLevel(null).id, 1);
-  assert.equal(getLevel(1).title, '分流节点');
+  assert.equal(getLevel(1).title, '让电流走一圈');
   assert.equal(getLevel(5).id, 1);
   assert.equal(getNextLevel(1), null);
   assert.equal(getLevel(1).model, 'resistor-dc-v1');
-  assert.deepEqual(getLevel(1).circuit.resistors, ['r1', 'r2', 'r3']);
+  assert.deepEqual(getLevel(1).circuit.resistors, ['r1', 'r2']);
   assert.equal(getLevel(1).circuit.nodeA, 'nodeA');
   assert.ok(getLevel(1).parts.every(part => !['mcu', 'led'].includes(part.id)));
 });
@@ -22,7 +22,7 @@ test('each resistor has an independent parameter menu and current state', () => 
   assert.equal(componentParameters('r1', level, game).value, '1000 Ω');
   game.resistorValues.r1 = 1500;
   assert.equal(componentParameters('r1', level, game).value, '1500 Ω');
-  assert.equal(componentParameters('r2', level, game).value, '1000 Ω');
+  assert.equal(componentParameters('r2', level, game).value, '2000 Ω');
   assert.equal(componentParameters('power', level, game).value, '9.0 V（固定）');
   assert.equal(evaluateCircuit(game, level).success, false);
 });

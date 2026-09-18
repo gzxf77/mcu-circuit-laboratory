@@ -21,3 +21,6 @@ web/.env.*
 
 # Local GitHub deployment credentials
 .local-keys/
+
+# Locally provided textbook reference
+电路 第6版 (邱关源).pdf

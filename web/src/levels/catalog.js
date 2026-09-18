@@ -50,49 +50,55 @@ export function makeGpioLedLevel({
 
 export const levels = Object.freeze({
   1: defineLevel({
-    id: 1, model: 'resistor-dc-v1', title: '分流节点', chapter: '第一章 · 电路基础', chapterSubtitle: '串并联与节点电流',
-    story: '电源、节点 A 和 GND 已固定在搭建区。直接拖入 R1、R2、R3：让 R1 连接电源与 A，让 R2、R3 分别从 A 接地。接线后可点击电阻调整阻值，再测量节点 A 的电压。',
-    concept: '用串并联等效电阻求总电流；同一节点的电压相同，流入节点的电流等于流出的电流。R1 两端压降与节点 A 电压之和应为 9 V。',
-    experiments: ['交换 R2、R3 的阻值，比较支路电流。', '断开一条支路，观察节点电压和总电流如何变化。', '比较三只电阻的耗散功率。'],
+    id: 1, model: 'resistor-dc-v1', title: '让电流走一圈', chapter: '第一章 · 电路基础', chapterSubtitle: '闭合回路与串联分压',
+    story: '9 V 电源、节点 A 和 GND 已固定。拖入 R1、R2，把它们串起来，形成从电源经 A 返回 GND 的回路。先看电流有没有流动，再用探针测 A 点；改变阻值，试着让 A 点的电压成为电源的一半。',
+    concept: '观察顺序：断开时没有闭合电流；闭合后两个串联电阻流过相同电流。电流可用 I = U ÷ (R1 + R2) 估算；两只电阻的压降相加等于电源电压。节点电压以 GND 为 0 V 参考。',
+    textbook: '邱关源《电路》第6版：§1-2 电流和电压的参考方向、§1-3 电功率和能量、§1-4 电路元件、§1-8 基尔霍夫定律、§2-2 电阻的串联和并联。首关只实验串联回路与压降。',
+    experiments: ['断开 R2 到 GND 的导线，再接回去：比较电流动画和探针读数。', '保持两个阻值相同，一起调大它们：A 点仍在中间吗？电流和功率怎样变化？', '只调大 R2，再只调大 R1：观察 A 点电压向哪边移动。'],
+    completion: {
+      detail: '你接通了串联回路，并用探针验证了中点电压。',
+      note: '串联处处同流；R1 与 R2 的压降相加等于电源电压。',
+      metrics: [
+        { label: '节点 A', keys: ['nodeAV'], unit: ' V' },
+        { label: '串联电流', keys: ['totalCurrentMa'], unit: ' mA' },
+        { label: 'R1 / R2 压降', keys: ['r1DropV', 'r2DropV'], unit: ' V' },
+      ],
+    },
     initialReversed: false,
     board: { fixedParts: ['power', 'nodeA', 'ground'], positions: {
-      power: { x: 175, y: 187 }, r1: { x: 345, y: 255 }, nodeA: { x: 493, y: 323 },
-      r2: { x: 570, y: 391 }, r3: { x: 570, y: 527 }, ground: { x: 790, y: 527 },
+      power: { x: 120, y: 350 }, r1: { x: 300, y: 350 }, nodeA: { x: 480, y: 350 },
+      r2: { x: 650, y: 350 }, ground: { x: 820, y: 350 },
     } },
     circuit: {
-      source: 'power', ground: 'ground', resistors: ['r1', 'r2', 'r3'], nodeA: 'nodeA',
-      flowLabel: '9 V 电源 → R1 → R2 ∥ R3 → GND',
+      source: 'power', ground: 'ground', resistors: ['r1', 'r2'], nodeA: 'nodeA',
+      flowLabel: '9 V 电源 → R1 → 节点 A → R2 → GND',
       baseWires: [],
-      solutionWires: ['power-r1.a', 'r1.b-nodeA', 'nodeA-r2.a', 'nodeA-r3.a', 'r2.b-ground', 'r3.b-ground'],
+      solutionWires: ['power-r1.a', 'r1.b-nodeA', 'nodeA-r2.a', 'r2.b-ground'],
     },
     electrical: {
-      sourceV: 9, resistorOptionsOhms: [470, 1000, 1500, 2000, 2200, 3300, 4700],
-      defaultOhms: { r1: 1000, r2: 1000, r3: 1000 },
-      referenceOhms: { r1: 1000, r2: 2000, r3: 2000 },
+      sourceV: 9, resistorOptionsOhms: [470, 1000, 1500, 2000, 2200, 3300],
+      defaultOhms: { r1: 1000, r2: 2000 },
+      referenceOhms: { r1: 1000, r2: 1000 },
       resistorRatedPowerW: 0.25,
     },
     parts: [
       { id: 'power', label: '9 V 电源', count: '×1' },
       { id: 'nodeA', label: '节点 A', count: '×1' },
-      { id: 'r1', label: 'R1 · 串联电阻', count: '×1' },
-      { id: 'r2', label: 'R2 · 支路电阻', count: '×1' },
-      { id: 'r3', label: 'R3 · 支路电阻', count: '×1' },
+      { id: 'r1', label: 'R1 · 电阻', count: '×1' },
+      { id: 'r2', label: 'R2 · 电阻', count: '×1' },
       { id: 'ground', label: 'GND', count: '×1' },
       { id: 'wire', label: '导线', count: '∞' }, { id: 'probe', label: '探针', count: '×1' },
     ],
     goals: [
-      { id: 'parts', label: '放入 R1、R2、R3，按需调整阻值', when: { all: [
-        { placed: 'power' }, { placed: 'nodeA' }, { placed: 'ground' }, { placed: 'r1' }, { placed: 'r2' }, { placed: 'r3' },
-        { resistorValuesSelected: true },
+      { id: 'loop', label: '接通 R1、R2 的串联回路，观察两处电流', when: { seriesConducting: true } },
+      { id: 'measure', label: '把探针移到节点 A，测量它相对 GND 的电压', when: { all: [
+        { goal: 'loop' }, { probeAt: 'nodeA' },
       ] } },
-      { id: 'voltage', label: '使节点 A 的电压约为 4.5 V', when: { metricBetween: { key: 'nodeAV', min: 4.45, max: 4.55 } } },
-      { id: 'currents', label: '总电流约 4.5 mA，两条支路各约 2.25 mA', when: { all: [
-        { metricBetween: { key: 'totalCurrentMa', min: 4.4, max: 4.6 } },
-        { metricBetween: { key: 'r2CurrentMa', min: 2.15, max: 2.35 } },
-        { metricBetween: { key: 'r3CurrentMa', min: 2.15, max: 2.35 } },
+      { id: 'half', label: '调整阻值，使 A 点约为电源电压的一半', when: { all: [
+        { goal: 'measure' }, { metricBetween: { key: 'nodeAV', min: 4.45, max: 4.55 } },
       ] } },
-      { id: 'safe', label: '三只电阻安全导通，功率低于额定值', when: { all: [
-        { goal: 'parts' }, { goal: 'voltage' }, { goal: 'currents' }, { networkSafe: true },
+      { id: 'safe', label: '两个电阻均在额定功率内', when: { all: [
+        { goal: 'half' }, { networkSafe: true },
       ] } },
     ],
   }),

@@ -29,6 +29,7 @@ export function evaluateGoals(level, game, currentPath, normalizeWire, probe = n
     if (condition.resistorPowerUnder) return currentPath?.resistorPowerW <= condition.resistorPowerUnder;
     if (condition.resistorSelected) return Number.isFinite(game.resistorOhms) && game.resistorOhms > 0;
     if (condition.resistorValuesSelected) return context?.allSelected === true;
+    if (condition.seriesConducting) return context?.seriesConducting === true;
     if (condition.metricBetween) {
       const value = context?.[condition.metricBetween.key];
       return Number.isFinite(value) && value >= condition.metricBetween.min && value <= condition.metricBetween.max;
