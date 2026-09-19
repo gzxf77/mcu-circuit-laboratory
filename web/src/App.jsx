@@ -69,7 +69,11 @@ export function App() {
     catch { return []; }
   });
   const [game, setGame] = useState(() => startGame(false, level));
-  const [probe, setProbe] = useState(null);
+  const [probe, setProbe] = useState(() => {
+    const target = level.circuit.defaultProbeTarget;
+    if (!target || !game.positions[target]) return null;
+    return snapProbe(game, game.positions[target]);
+  });
   const [failureOpen, setFailureOpen] = useState(false);
   const [successOpen, setSuccessOpen] = useState(false);
   const [mode, setMode] = useState('wire');
@@ -108,8 +112,13 @@ export function App() {
     setNotice(message);
     timer.current = setTimeout(() => setNotice(''), 3000);
   };
-  const selectBoard = id => { pointerTrace('selection', { from: selected, to: id }); setInventoryPart(null); setSelected(id); };
-  const inspectInventory = id => { setSelected(null); setInventoryPart(current => current === id ? null : id); };
+  const selectBoard = id => {
+    pointerTrace('selection', { from: selected, to: id });
+    setInventoryPart(null);
+    if (isDiagnosis && /^r\d+$/.test(id)) { if (mode !== 'probe') toggleSuspectShort(id); return; }
+    setSelected(id);
+  };
+  const inspectInventory = id => { setSelected(null); if (id === 'resistor' && level.circuit.resistorSlots) { notify('把电阻拖到搭建区放置；放好后点击画布上的电阻可调阻值。'); return; } setInventoryPart(current => current === id ? null : id); };
   const updateGame = (next) => {
     clearRunTimers();
     history.current.push({ game: structuredClone(game), probe: probe && { ...probe } });
@@ -127,9 +136,20 @@ export function App() {
     if (!position) return;
     if (level.board.fixedParts?.includes(id)) return;
     if (id === 'wire') { setMode('wire'); notify('按住一个端点，拖到另一个端点后松开即可连线。'); return; }
-    if (id === 'resistor' && !game.resistorOhms) {
-      setInventoryPart(id);
-      notify('请先点选电阻并选择阻值，再拖入搭建区。');
+    if (id === 'resistor') {
+      // Reuse the lowest free number: deleting R2 and placing again gives R2, not R4.
+      const used = new Set(Object.keys(game.placed).filter(name => game.placed[name] && /^r\d+$/.test(name)));
+      let number = 1;
+      while (used.has('r' + number)) number += 1;
+      const next = 'r' + number;
+      const ohms = game.resistorValues?.[next] ?? level.electrical.defaultOhms?.[next] ?? 1000;
+      updateGame({
+        ...game,
+        placed: { ...game.placed, [next]: true },
+        positions: { ...game.positions, [next]: snapComponentPosition(next, position) },
+        resistorValues: { ...game.resistorValues, [next]: ohms },
+      });
+      notify('电阻已放置（' + next.toUpperCase() + '，' + ohms + ' Ω）。拖动端点连线，点击电阻可调阻值。');
       return;
     }
     if (id === 'probe') {
@@ -188,8 +208,10 @@ export function App() {
     pointerTrace('inventory-place', { id: drag.id, point });
     addPart(drag.id, { x: Math.round(point.x), y: Math.round(point.y) });
   };
+  const isDiagnosis = (level.circuit.hiddenOpenCandidates?.length || level.circuit.hiddenOpenWires?.length || level.circuit.hiddenShortCandidates?.length) > 0;
   const connect = (from, to) => {
     // Keyboard users can select two focused terminals with Enter or Space.
+    if (isDiagnosis) { notify('本关导线已全部预置，任务是诊断现有线路，不需要接线。'); setPending(null); return; }
     if (!to && !pending) { setPending(from); return; }
     const start = to ? from : pending;
     const end = to || from;
@@ -200,6 +222,21 @@ export function App() {
     updateGame({ ...game, wires: [...game.wires, start + '-' + end] });
     setPending(null);
     notify('导线已连接。');
+  };
+  const toggleSuspect = (key) => {
+    const marked = game.suspectedWires.includes(key);
+    updateGame({
+      ...game,
+      suspectedWires: marked
+        ? game.suspectedWires.filter(item => item !== key)
+        : [...game.suspectedWires, key],
+    });
+    notify(marked ? '已取消对这根导线的标记。' : '已标记这根导线为疑似断点。');
+  };
+  const toggleSuspectShort = (id) => {
+    const marked = game.suspectedShort === id;
+    updateGame({ ...game, suspectedShort: marked ? null : id });
+    notify(marked ? '已取消对该电阻的短路标记。' : '已标记 ' + id.toUpperCase() + ' 为疑似被短接。');
   };
   const reset = () => {
     clearRunTimers();
@@ -212,7 +249,7 @@ export function App() {
     setInventoryPart(null);
     setFailureOpen(false);
     setSuccessOpen(false);
-    notify(level.board.fixedParts?.length ? '已重置电路。预设端点保留，请重新放入电阻并接线。' : '已重置为空白画布。请从元件库放入所有元件。');
+    if (isDiagnosis) notify('已重新生成故障电路，请继续测量诊断。'); else notify(level.board.fixedParts?.length ? '已重置电路。预设端点保留，请重新放入电阻并接线。' : '已重置为空白画布。请从元件库放入所有元件。');
   };
   const undo = () => {
     clearRunTimers();
@@ -342,29 +379,28 @@ export function App() {
         <section className="panel quest-panel">
           <div className="panel-title gold"><Icon icon={Target} size={26} weight="duotone" /><h1>任务 {levelNumber} · {level.title}</h1></div>
           <div className="quest-content">
-            <p className="story">{level.story}</p>
             <div className="goals"><div className="section-heading"><Icon icon={BookOpen} size={18} />任务目标</div>{level.goals.map((goal, index) => <div className="goal" key={goal.id}><span className={'goal-check ' + (checks[index] ? 'passed' : '')}>{checks[index] && <Icon icon={Check} size={13} weight="bold" />}</span><span>{goal.label}</span></div>)}</div>
             <div className={'goal-summary ' + (report.success ? 'complete' : '')}><Icon icon={report.success ? Check : Target} size={21} weight="bold" /><strong>{report.success ? '目标全部达成 · ' + (level.model === 'resistor-dc-v1' ? '电路验证通过' : 'LED 已点亮') : '当前完成 ' + checks.filter(Boolean).length + ' / ' + checks.length + ' 项'}</strong><small>操作变化时自动更新</small></div>
           </div>
         </section>
         <section className="panel inventory-panel"><div className="panel-title"><Icon icon={Cpu} size={23} /><h2>元件库</h2><small>点击看参数 · 拖入画布</small></div>
-          <div className="part-grid">{level.parts.filter(part => !level.board.fixedParts?.includes(part.id)).map(part => <button key={part.id} type="button" className={'part-tile ' + ((part.id === 'probe' ? probe : game.placed[part.id]) ? 'placed' : '')}
+          <div className="part-grid">{level.parts.filter(part => !level.board.fixedParts?.includes(part.id)).map(part => { const slots = part.id === 'resistor' ? (level.circuit.resistorSlots || []) : null; const placedCount = slots ? Object.keys(game.placed).filter(id => game.placed[id] && /^r\d+$/.test(id)).length : 0; const isFull = slots ? placedCount >= slots.length : false; const isPlaced = part.id === 'probe' ? probe : slots ? isFull : Boolean(game.placed[part.id]); return <button key={part.id} type="button" className={'part-tile ' + (isPlaced ? 'placed' : '')}
             onPointerDown={event => startInventoryDrag(event, part.id)} onPointerMove={moveInventoryDrag}
             onPointerUp={finishInventoryDrag} onPointerCancel={event => finishInventoryDrag(event, true)}
             onLostPointerCapture={event => { if (inventoryDrag.current?.pointerId === event.pointerId) { pointerTrace('inventory-capture-lost', { id: part.id, pointerId: event.pointerId }); inventoryDrag.current = null; setDragPreview(null); } }}
             onDragStart={event => event.preventDefault()}
             onClick={event => { if (suppressInventoryClick.current) { suppressInventoryClick.current = false; event.preventDefault(); return; } inspectInventory(part.id); }}>
-            <InventoryIcon id={part.id} /><span>{part.label}</span><small>{(part.id === 'probe' ? probe : game.placed[part.id]) ? '已放置' : level.circuit.resistors?.includes(part.id) ? (game.resistorValues?.[part.id] ? game.resistorValues[part.id] + ' Ω' : '选阻值') : part.id === 'resistor' ? (game.resistorOhms ? game.resistorOhms + ' Ω' : '选阻值') : part.count}</small>
-          </button>)}<button className="part-tile more" onClick={() => notify('更多元件将在后续关卡开放。')}><Icon icon={Plus} size={31} /><span>更多元件</span><small>敬请期待</small></button></div>
+            <InventoryIcon id={part.id} /><span>{part.label}</span><small>{slots ? (placedCount ? '已放 ' + placedCount + ' 只' : '∞ 只可放') : (part.id === 'probe' ? probe : game.placed[part.id]) ? '已放置' : part.count}</small>
+          </button>})}</div>
           <div className="inventory-tip"><Icon icon={HandTap} size={17} />点击查看参数，拖入搭建区放置</div>
           {inventoryPart && <div className="inventory-popover"><PartParameterMenu id={inventoryPart} level={level} game={game} placement onChooseResistor={chooseResistor} onClose={() => setInventoryPart(null)} onUseWire={() => { setMode('wire'); setInventoryPart(null); notify('连线模式：从一个端点拖到另一个端点。'); }} /></div>}
         </section>
       </aside>
       <section className="panel board-panel" aria-label="电路搭建区">
         <div className="board-header"><div><Icon icon={Cpu} size={23} /><strong>电路搭建区</strong><small>拖拽元件、连接端点，结果实时更新</small></div><div className="board-controls"><button className={mode === 'wire' ? 'active' : ''} aria-pressed={mode === 'wire'} onClick={() => setMode('wire')}><Icon icon={LinkSimple} size={18} />连线</button><button className={mode === 'probe' ? 'active' : ''} aria-pressed={mode === 'probe'} disabled={!probe} title={!probe ? '先从元件库拖入探针' : '点击端点切换探针测点'} onClick={() => { setMode('probe'); setPending(null); }}><Icon icon={Waveform} size={18} />测量</button><button onClick={() => setZoom(zoom === 100 ? 125 : zoom === 125 ? 80 : 100)}><Icon icon={MagnifyingGlassPlus} size={18} />{zoom}%<Icon icon={CaretDown} size={13} /></button></div></div>
-        <div className="board-stage"><CircuitBoard level={level} game={game} componentStates={report.componentStates} currentPath={report.currentPath} flowEdges={report.flowEdges} failureEffect={['overcurrent', 'gpio-short', 'supply-short'].includes(report.kind) ? report.kind : null} probe={probe} probeReading={probeReading} mode={mode} pending={pending} selected={selected} zoom={zoom} onConnect={connect} onProbeChange={setProbe} onSelect={selectBoard} onMove={movePart} onMoveEnd={finishMove} onDropPart={addPart} onRemoveSelected={removeSelected} onFlipLed={flipLed} onChooseResistor={chooseResistor} />
+        <div className="board-stage"><CircuitBoard level={level} game={game} componentStates={report.componentStates} currentPath={report.currentPath} flowEdges={report.flowEdges} failureEffect={['overcurrent', 'gpio-short', 'supply-short'].includes(report.kind) ? report.kind : null} probe={probe} probeReading={probeReading} mode={mode} pending={pending} selected={selected} zoom={zoom} onConnect={connect} onProbeChange={setProbe} onSelect={selectBoard} onMove={movePart} onMoveEnd={finishMove} onDropPart={addPart} onRemoveSelected={removeSelected} onFlipLed={flipLed} onChooseResistor={chooseResistor} onToggleSuspect={toggleSuspect} />
           {!Object.values(game.placed).some(Boolean) && !probe && <div className="empty-board"><Icon icon={Circuitry} size={42} weight="duotone" /><strong>从空白电路开始</strong><span>点击左侧元件查看参数，再拖入 {requiredPartNames}</span><small>按住端点拖到另一端点松开连线 · 拖入探针即可观察波形</small></div>}
-          {report.flowEdges.length > 0 && <div className="current-flow-legend"><i />常规电流方向 <span>{report.currentPath.flowLabel} · {report.currentLabel}</span></div>}
+          {report.flowEdges.length > 0 && <div className="current-flow-legend"><i />实时电流 <span>{report.currentLabel}</span></div>}
           {pending && <div className="board-message"><Icon icon={LinkSimple} size={16} />键盘已选起点：{pending}，聚焦另一端点按 Enter。Esc 取消。</div>}
           {notice && <div className="toast" role="status">{notice}</div>}
         </div>
@@ -372,7 +408,9 @@ export function App() {
       </section>
       <aside className="right-stack">
         <section className="panel output-panel"><div className="panel-title"><Icon icon={Waveform} size={24} /><h2>实时测量</h2><small>探针与波形同步</small></div><Scope reading={probeReading} level={level} /></section>
-        <section className="panel hint-panel"><button onClick={() => setHintOpen(!hintOpen)} aria-expanded={hintOpen}><span><Icon icon={LightbulbFilament} size={22} />实验提示</span><Icon icon={CaretDown} size={17} className={hintOpen ? 'rotated' : ''} /></button>{hintOpen && <><p>{report.nextStep}</p>{level.experiments?.length > 0 && <div className="experiment-suggestions"><strong>通关后继续试试</strong><ul>{level.experiments.map(item => <li key={item}>{item}</li>)}</ul></div>}</>}</section>
+        <section className="panel knowledge-panel"><div className="panel-title"><Icon icon={LightbulbFilament} size={22} /><h2>知识卡</h2></div>{(Array.isArray(level.knowledge) ? level.knowledge : level.knowledge ? [level.knowledge] : []).map((card, index) => (
+          <div className="knowledge-card" key={card.title + index}><strong>{card.title}</strong><code>{card.formula}</code><small>{card.text}</small></div>
+        ))}{!level.knowledge && (<><p>{report.nextStep}</p>{level.experiments?.length > 0 && <div className="experiment-suggestions"><strong>通关后继续试试</strong><ul>{level.experiments.map(item => <li key={item}>{item}</li>)}</ul></div>}</>)}</section>
       </aside>
     </main>
     {dragPreview && <div className="inventory-drag-preview" style={{ left: dragPreview.x + 14, top: dragPreview.y + 14 }} aria-hidden="true"><InventoryIcon id={dragPreview.id} /><span>{level.parts.find(part => part.id === dragPreview.id)?.label}</span></div>}
@@ -383,11 +421,15 @@ export function App() {
         <div className="success-emblem"><Icon icon={Trophy} size={54} weight="duotone" /></div>
         <div className="success-kicker">LEVEL {levelNumber} · CLEARED</div>
         <h2 id="success-title">{level.title}，通关！</h2>
-        <p id="success-detail">{level.model === 'resistor-dc-v1' ? '节点电压、两条支路电流与功率均满足设计目标；' : 'GPIO0 经限流电阻驱动 LED，'}{level.goals.length} 项任务目标全部达成。</p>
-        {level.model === 'resistor-dc-v1'
-          ? <div className="success-metrics"><div><small>节点 A</small><strong>{report.network.nodeAV.toFixed(2)} V</strong></div><div><small>总电流</small><strong>{report.currentLabel}</strong></div><div><small>R2 / R3 · mA</small><strong>{report.network.r2CurrentMa.toFixed(2)} / {report.network.r3CurrentMa.toFixed(2)}</strong></div></div>
-          : <div className="success-metrics"><div><small>GPIO 高电平</small><strong>{level.electrical.gpioHighV.toFixed(1)} V</strong></div><div><small>限流电阻</small><strong>{game.resistorOhms} Ω</strong></div><div><small>支路电流</small><strong>{report.currentLabel}</strong></div></div>}
-        <div className="success-note"><Icon icon={Check} size={18} weight="bold" />{level.model === 'resistor-dc-v1' ? 'KCL、KVL 与元件功率均通过检查' : '电流符合本关目标范围，LED 正常点亮'}</div>
+        <p id="success-detail">{isDiagnosis ? (report.diagnosis?.kind === 'short' ? '你通过测量找到了被短接的元件；' : '你通过逐线测量找到了断开的导线；') : level.model === 'resistor-dc-v1' ? '节点电压与总电流满足目标；' : 'GPIO0 经限流电阻驱动 LED，'}{level.goals.length} 项任务目标全部达成。</p>
+        {isDiagnosis && report.diagnosis?.kind === 'short'
+          ? <div className="success-metrics"><div><small>被短接元件</small><strong>{report.diagnosis.label}</strong></div><div><small>两端电压</small><strong>{report.diagnosis.va.toFixed(1)} / {report.diagnosis.vb.toFixed(1)} V</strong></div><div><small>现象</small><strong>电流旁路</strong></div></div>
+          : isDiagnosis
+          ? <div className="success-metrics"><div><small>定位到的断点</small><strong>{report.diagnosis?.label}</strong></div><div><small>两端电压</small><strong>{report.diagnosis?.va.toFixed(1)} / {report.diagnosis?.vb.toFixed(1)} V</strong></div><div><small>电压差</small><strong>{report.diagnosis?.diff.toFixed(1)} V</strong></div></div>
+          : level.model === 'resistor-dc-v1'
+            ? <div className="success-metrics"><div><small>节点 A</small><strong>{report.network.nodeAV.toFixed(2)} V</strong></div><div><small>总电流</small><strong>{report.currentLabel}</strong></div><div><small>使用电阻</small><strong>{Object.keys(game.placed).filter(id => game.placed[id] && /^r\d+$/.test(id)).length} 只</strong></div></div>
+            : <div className="success-metrics"><div><small>GPIO 高电平</small><strong>{level.electrical.gpioHighV.toFixed(1)} V</strong></div><div><small>限流电阻</small><strong>{game.resistorOhms} Ω</strong></div><div><small>支路电流</small><strong>{report.currentLabel}</strong></div></div>}
+        <div className="success-note"><Icon icon={Check} size={18} weight="bold" />{isDiagnosis ? (report.diagnosis?.kind === 'short' ? '短接处电压为 0；电流走旁路、总电流增大' : '导通线两端等电位；断线两端电位不等') : level.model === 'resistor-dc-v1' ? 'KCL、KVL 与元件功率均通过检查' : '电流符合本关目标范围，LED 正常点亮'}</div>
         {nextLevel && <button className="success-primary" onClick={() => goToLevel(nextLevel.id)}>进入第 {nextLevel.id} 关 · {nextLevel.title}</button>}
         <button className={nextLevel ? 'success-secondary' : 'success-primary'} onClick={() => setSuccessOpen(false)}>返回电路继续探索</button>
       </section>

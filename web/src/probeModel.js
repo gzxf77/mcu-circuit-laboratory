@@ -41,10 +41,17 @@ function readResistorProbe(game, report, probe, level) {
   const voltageV = target ? report.network.voltageAt(target) : null;
   const branch = report.network.resistorResults[id];
   const wireCurrent = probe.wire && report.network.wireCurrents[probe.wire];
+  // Probe on a plain wire node (e.g. node A): read the currents of wires touching
+  // that pin. A pass-through node has one unique current; a split node's largest
+  // wire current is the total current entering the node (KCL).
+  const touching = Object.values(report.network.wireCurrents)
+    .filter(w => w && (w.from === target || w.to === target))
+    .map(w => w.currentMa).filter(Number.isFinite);
+  const nodeWireCurrent = touching.length ? Math.max(...touching) : null;
   const currentMa = !target || report.network.shorted ? null
     : wireCurrent ? wireCurrent.currentMa
       : probe.wire ? 0
-        : branch?.currentMa ?? (target === level.circuit.source || target === level.circuit.ground
+        : branch?.currentMa ?? nodeWireCurrent ?? (target === level.circuit.source || target === level.circuit.ground
           ? report.network.totalCurrentMa : 0);
   return {
     pointLabel, target,

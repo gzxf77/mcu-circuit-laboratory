@@ -14,10 +14,46 @@ export const baseWires = defaultLevel.circuit.baseWires || [];
 export const solutionWires = defaultLevel.circuit.solutionWires;
 
 export function startGame(solved = false, level = defaultLevel) {
+  // Diagnosis levels look fully wired but hide one random fault: either an open
+  // wire (electrically removed) or a short (a hidden wire bypassing a resistor).
+  const openCandidates = level.circuit.hiddenOpenCandidates?.length
+    ? level.circuit.hiddenOpenCandidates
+    : (level.circuit.hiddenOpenWires || []);
+  const shortCandidates = level.circuit.hiddenShortCandidates || [];
+  const faultPool = [
+    ...openCandidates.map(target => ({ kind: 'open', target })),
+    ...shortCandidates.map(target => ({ kind: 'short', target })),
+  ];
+  const diagnosing = faultPool.length > 0;
+  const fault = !diagnosing ? null
+    : solved ? faultPool[0]
+      : faultPool[Math.floor(Math.random() * faultPool.length)];
+  const hiddenOpenWire = fault?.kind === 'open' ? fault.target : null;
+  const hiddenShortId = fault?.kind === 'short' ? fault.target : null;
+  const hiddenShortWire = hiddenShortId ? hiddenShortId + '.a-' + hiddenShortId + '.b' : null;
+  const hiddenOpenSet = hiddenOpenWire ? new Set([normalizeWire(hiddenOpenWire)]) : new Set();
+  let startWires;
+  if (solved && !diagnosing) startWires = [...level.circuit.solutionWires];
+  else if (diagnosing) {
+    startWires = level.circuit.solutionWires.filter(wire => !hiddenOpenSet.has(normalizeWire(wire)));
+    if (hiddenShortWire) startWires = [...startWires, hiddenShortWire];
+  } else startWires = [...(level.circuit.initialWires || [])];
   return {
     levelId: level.id,
-    placed: Object.fromEntries(level.parts.filter(part => !['wire', 'probe'].includes(part.id)).map(part => [part.id, solved || Boolean(level.board.fixedParts?.includes(part.id))])),
-    wires: solved ? [...level.circuit.solutionWires] : [],
+    placed: Object.fromEntries([
+      ...level.parts.filter(part => !['wire', 'probe'].includes(part.id) && !(part.id === 'resistor' && part.count === '∞')).map(part => [part.id, solved || Boolean(level.board.fixedParts?.includes(part.id))]),
+      ...(level.circuit.resistors || []).map(id => [id, solved || Boolean(level.board.fixedParts?.includes(id))]),
+    ]),
+    wires: startWires,
+    // Visual wires: both faults look like a fully wired healthy circuit (the open
+    // is still drawn, and the short wire is never drawn).
+    visualWires: diagnosing ? [...level.circuit.solutionWires] : null,
+    faultKind: fault?.kind ?? null,
+    hiddenOpenWire,
+    hiddenShortId,
+    hiddenShortWire,
+    suspectedWires: solved && hiddenOpenWire ? [hiddenOpenWire] : [],
+    suspectedShort: solved && hiddenShortId ? hiddenShortId : null,
     reversed: solved ? false : level.initialReversed,
     resistorOhms: level.electrical.resistorOhms,
     resistorValues: level.model === 'resistor-dc-v1'
@@ -39,10 +75,11 @@ export function evaluateCircuit(game, level = defaultLevel, probe = null) {
 
 function evaluateResistorDc(game, level, probe) {
   const network = solveResistiveNetwork(game, level);
+  if (level.circuit.hiddenOpenCandidates?.length || level.circuit.hiddenOpenWires?.length || level.circuit.hiddenShortCandidates?.length) return evaluateFaultDiagnosis(game, level, network);
   const rated = level.electrical.resistorRatedPowerW;
   const resistorResults = Object.values(network.resistorResults);
+  const placedResistorIds = Object.keys(game.placed).filter(id => game.placed[id] && /^r\d+$/.test(id));
   const networkSafe = !network.shorted && network.allSelected &&
-    level.circuit.resistors.every(id => game.placed[id]) &&
     resistorResults.every(item => Number.isFinite(item.currentMa) && item.currentMa > 1e-6 && item.powerW <= rated) &&
     Number.isFinite(network.totalCurrentMa) && network.kclErrorMa < 0.01;
   const metrics = { ...network, networkSafe };
@@ -62,32 +99,146 @@ function evaluateResistorDc(game, level, probe) {
     '电源输出已停止求解，节点电压与电流不能可靠显示。',
     '导线形成了绕过电阻的零电阻通路。真实短路电流取决于电源内阻与保护电路。',
     '检查电源与 GND 之间的直连导线。');
-  const missing = level.parts.filter(part => !['wire', 'probe'].includes(part.id) && !game.placed[part.id]);
-  if (missing.length) return result('missing-part', '元件还没有放齐',
-    '当前仅能计算已闭合的支路。', '本关需要在预设的电源、节点 A、GND 之间放入三只电阻。',
-    '从元件库拖入 ' + missing.map(part => part.label).join('、') + '。');
+  if (placedResistorIds.length === 0) return result('missing-part', '先放入电阻',
+    '画布上还没有电阻，电路无法导通。', '本关只要求一个结果：让节点 A 约 4.5 V、总电流约 4.5 mA，怎么搭由你决定。',
+    '从元件库拖电阻到搭建区，搭出你想到的网络。');
   if (!network.allSelected) return result('resistor-unselected', '还有电阻未选阻值',
     '未定阻值的支路不能求解。', level.concept,
-    '逐只点选 R1、R2、R3，选择阻值。');
+    '逐只点击画布上的电阻，选择阻值。');
   if (!Number.isFinite(network.nodeAV) || !Number.isFinite(network.totalCurrentMa) ||
-      level.circuit.resistors.some(id => !Number.isFinite(network.resistorResults[id].currentMa) || network.resistorResults[id].currentMa <= 1e-6)) {
+      placedResistorIds.some(id => {
+        const part = network.resistorResults[id];
+        return !part || !Number.isFinite(part.currentMa) || (part.currentMa <= 1e-6 && !part.bypassed);
+      })) {
     return result('open-circuit', '网络尚未形成目标回路',
       '至少一条支路没有可计算的闭合电流。',
       '电流必须从电源经 R1 到达节点 A，再分别经过 R2、R3 返回 GND。悬空节点不会被当作 0 V。',
       '沿电源 → R1 → 分叉 → R2/R3 → GND 检查各端点。');
   }
+  const bypassed = placedResistorIds.find(id => network.resistorResults[id]?.bypassed);
+  if (bypassed) {
+    const label = bypassed.toUpperCase();
+    return result('resistor-short', label + ' 被导线短接',
+      label + ' 两端电位相同、电流约为 0 mA，其余支路仍导通。',
+      '电阻两端被一根导线直接连通时，电流绕过该电阻，其两端电压差为零。',
+      '检查并删除绕过 ' + label + ' 的多余导线，让电流从该电阻流过。');
+  }
   if (resistorResults.some(item => item.powerW > rated)) return result('resistor-overload', '电阻功率超过额定值',
     '至少一只电阻的耗散功率大于 ' + rated + ' W。',
     '按 P = I²R 检查每只电阻；实际过载可能导致发热或损坏。',
     '增大合适的阻值或调整网络连接，重新核对功率。');
-  if (success) return result('success', '节点电压与分流均符合目标',
+  if (success) return result('success', '节点电压与总电流都符合目标',
     '节点 A 约 ' + network.nodeAV.toFixed(2) + ' V；总电流约 ' + network.totalCurrentMa.toFixed(2) + ' mA。',
-    'R2、R3 的支路电流之和与流经 R1 的总电流一致；R1 压降与节点 A 电压之和为 9 V。',
-    '移动探针比较三处电流，再尝试改变一条支路。');
+    '这就是你的解法：流入节点 A 的电流等于流出的电流；沿任一回路，各段电压降之和等于电源 9 V。',
+    '换一种结构再试一次：串联分压、多支路并联，都能达到同样的节点电压。');
   return result('target-mismatch', '电路导通，但测量值未达到目标',
     '节点 A 为 ' + network.nodeAV.toFixed(2) + ' V，总电流为 ' + network.totalCurrentMa.toFixed(2) + ' mA。',
     '检查串联电阻与两个并联支路的阻值。' + level.concept,
     '先预测改变哪只电阻会使节点电压接近 4.5 V，再用探针核对。');
+}
+
+function wireEndLabel(endpoint) {
+  const [id, pin] = endpoint.split('.');
+  if (id === 'ground') return 'GND';
+  if (id === 'power') return '电源';
+  if (id === 'nodeA') return '节点 A';
+  return id.toUpperCase() + (pin ? '·' + pin : '');
+}
+function wireLabel(wire) {
+  return wire.split('-').map(wireEndLabel).join(' → ');
+}
+
+// Diagnosis levels render a fully wired-looking circuit while hiding one fault:
+// an open wire (ends have different potentials) or a short bypassing a resistor
+// (its two ends are tied, current leaves the resistor at zero voltage).
+function evaluateFaultDiagnosis(game, level, network) {
+  const wireDiffs = level.circuit.solutionWires.map(wire => {
+    const [a, b] = wire.split('-');
+    const va = network.voltageAt(a);
+    const vb = network.voltageAt(b);
+    const finiteV = Number.isFinite(va) && Number.isFinite(vb);
+    return { wire, key: normalizeWire(wire), va, vb, diff: finiteV ? Math.abs(va - vb) : null };
+  });
+  const resistorDiffs = (level.circuit.resistors || []).map(id => {
+    const va = network.voltageAt(id + '.a');
+    const vb = network.voltageAt(id + '.b');
+    const finiteV = Number.isFinite(va) && Number.isFinite(vb);
+    const result = network.resistorResults[id];
+    return { id, va, vb, diff: finiteV ? Math.abs(va - vb) : null,
+      currentMa: result?.currentMa ?? 0, bypassed: Boolean(result?.bypassed) };
+  });
+  const kind = game.faultKind;
+  const playerOpen = new Set((game.suspectedWires || []).map(normalizeWire));
+  const playerShort = game.suspectedShort || null;
+  let exact = false;
+  if (kind === 'open') {
+    exact = playerShort === null && playerOpen.size === 1 && playerOpen.has(normalizeWire(game.hiddenOpenWire));
+  } else if (kind === 'short') {
+    exact = playerOpen.size === 0 && playerShort === game.hiddenShortId;
+  }
+  const totalCurrentMa = Number.isFinite(network.totalCurrentMa) ? network.totalCurrentMa : 0;
+  const currentLabel = '约 ' + totalCurrentMa.toFixed(2) + ' mA';
+  const flowEdges = Object.values(network.wireCurrents).map(item => [item.from, item.to]);
+  const currentPath = { kind: 'resistor-network', currentMa: network.totalCurrentMa, currentLabel, flowLabel: level.circuit.flowLabel };
+  const base = {
+    checks: [exact], success: exact, currentLabel, currentPath, flowEdges,
+    network, ledState: 'off', gpioWaveform: 'flat',
+  };
+  const result = (kind2, headline, observed, explanation, nextStep, extra = {}) => ({
+    ...base, kind: kind2, headline, observed, explanation, nextStep, message: headline, ...extra,
+  });
+  if (exact && kind === 'open') {
+    const broken = wireDiffs.find(item => item.key === normalizeWire(game.hiddenOpenWire));
+    return result('success', '故障定位正确：开路！',
+      '断开处 ' + wireLabel(broken.wire) + '：一端 ' + broken.va.toFixed(1) + ' V，另一端 ' + broken.vb.toFixed(1) + ' V，线上电流为 0。',
+      '开路时回路电流为零，断点两侧电位不同；你通过逐线测量找到了它。',
+      '真实修复：接好这根导线，回路恢复约 2.25 mA 正常电流。',
+      { diagnosis: { kind: 'open', wire: broken.wire, label: wireLabel(broken.wire), va: broken.va, vb: broken.vb, diff: broken.diff } });
+  }
+  if (exact && kind === 'short') {
+    const shortRes = resistorDiffs.find(item => item.id === game.hiddenShortId);
+    return result('success', '故障定位正确：短路！',
+      shortRes.id.toUpperCase() + ' 被旁路：两端都是 ' + shortRes.va.toFixed(1) + ' V、电流 0 mA；总电流 ' + totalCurrentMa.toFixed(2) + ' mA。',
+      '短路时被旁路元件两端电压为零，电流从零电阻旁路线流过，总电流增大。',
+      '真实修复：拆除旁路 ' + shortRes.id.toUpperCase() + ' 的导线，电流恢复约 2.25 mA。',
+      { diagnosis: { kind: 'short', resistor: shortRes.id, label: shortRes.id.toUpperCase(), va: shortRes.va, vb: shortRes.vb } });
+  }
+  if (playerOpen.size === 0 && playerShort === null) {
+    return result('diagnose-needed', '还没有标记故障位置',
+      '总电流 ' + totalCurrentMa.toFixed(2) + ' mA（正常应约 2.25 mA），电路外观完整。',
+      '先看总电流判断类型：电流为 0 是开路；电流偏大（约 3 mA）是短路。',
+      '开路：逐根测导线两端，标记压差不为 0 的线；短路：逐只测电阻两端，标记压差为 0 的电阻。');
+  }
+  if (kind === 'open' && playerShort) {
+    return result('diagnose-wrong', '不是短路',
+      '你标记了 ' + playerShort.toUpperCase() + ' 被短接，但整条电路电流为 0。',
+      '电阻被短接时总电流应增大到约 3 mA；总电流为 0 是开路特征（开路点上游的电阻也会因无电流而两端等电位，别被它误导）。',
+      '取消该标记，改测导线两端，找出压差不为 0 的断线。');
+  }
+  if (kind === 'open') {
+    const wrong = [...playerOpen].map(key => wireDiffs.find(item => item.key === key)).find(item => item.key !== normalizeWire(game.hiddenOpenWire));
+    if (wrong) {
+      return result('diagnose-wrong', '标记的导线不对',
+        wireLabel(wrong.wire) + ' 两端都是 ' + wrong.va.toFixed(1) + ' V，是导通的。',
+        '导通导线两端电位相同；只有断线两端有压差。',
+        '取消错误标记，找到两端电压不等的那根线。');
+    }
+  }
+  if (kind === 'short' && playerOpen.size) {
+    const w = [...playerOpen].map(key => wireDiffs.find(item => item.key === key))[0];
+    return result('diagnose-wrong', '不是开路',
+      wireLabel(w.wire) + ' 两端都是 ' + w.va.toFixed(1) + ' V，是导通的；总电流 ' + totalCurrentMa.toFixed(2) + ' mA 并不为 0。',
+      '开路时总电流应为 0；当前约 3 mA，是短路特征。',
+      '取消导线标记，改测电阻两端，找出压差为 0 的那只。');
+  }
+  if (kind === 'short' && playerShort) {
+    const r = resistorDiffs.find(item => item.id === playerShort);
+    return result('diagnose-wrong', '标记的电阻没有被短接',
+      r.id.toUpperCase() + ' 两端压差 ' + r.diff.toFixed(1) + ' V（' + r.va.toFixed(1) + ' / ' + r.vb.toFixed(1) + '），电流 ' + r.currentMa.toFixed(2) + ' mA。',
+      '被短接的电阻两端压差为 0、电流为 0。',
+      '取消标记，逐只测量，找到两端等电位的电阻。');
+  }
+  return result('diagnose-partial', '标记不完整', '请确认只标记了真正的故障位置。', level.concept, '重新核对测量读数。');
 }
 
 function evaluateGpioLedSeries(game, level, probe) {

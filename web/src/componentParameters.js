@@ -2,7 +2,7 @@
 // Values come from the active level and live game state, never duplicated in JSX.
 export function componentParameters(id, level, game) {
   if (level.model === 'resistor-dc-v1') {
-    if (level.circuit.resistors.includes(id)) return {
+    if (/^r\d+$/.test(id)) return {
       title: id.toUpperCase() + ' 电阻',
       value: game.resistorValues?.[id] ? game.resistorValues[id] + ' Ω' : '尚未选择阻值',
       detail: level.concept,
@@ -15,7 +15,7 @@ export function componentParameters(id, level, game) {
     if (id === 'probe') return { title: '探针', value: '节点电压 + 支路电流估算', detail: '拖入搭建区，接触端点或导线查看读数。' };
     if (id === 'wire') return { title: '导线', value: '连线工具', detail: '按住一个端点，拖到另一个端点后松开。' };
   }
-  const voltage = level.electrical.gpioHighV.toFixed(1);
+  const voltage = level.electrical.gpioHighV ? level.electrical.gpioHighV.toFixed(1) : '0';
   const ledDrop = level.electrical.ledForwardV.toFixed(1);
   switch (id) {
     case 'mcu':

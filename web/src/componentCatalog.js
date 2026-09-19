@@ -11,7 +11,7 @@ export const componentCatalog = Object.freeze({
   ground: { visualBounds: [-48, 48, -12, 95], terminals: { ground: { x: 0, y: 0 } } },
   nodeA: { visualBounds: [-30, 30, -48, 30], terminals: { nodeA: { x: 0, y: 0 } } },
   resistor: { visualBounds: [-72, 72, -60, 24], terminals: { 'resistor.a': { x: -70, y: 0 }, 'resistor.b': { x: 70, y: 0 } } },
-  ...Object.fromEntries(['r1', 'r2', 'r3'].map(id => [id, {
+  ...Object.fromEntries(['r1', 'r2', 'r3', 'r4'].map(id => [id, {
     visualBounds: [-72, 72, -60, 24],
     terminals: { [`${id}.a`]: { x: -70, y: 0 }, [`${id}.b`]: { x: 70, y: 0 } },
   }])),

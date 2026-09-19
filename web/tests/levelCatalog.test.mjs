@@ -5,15 +5,46 @@ import { makeGpioLedLevel, getLevel, getNextLevel, levelIds } from '../src/level
 import { componentParameters } from '../src/componentParameters.js';
 
 test('the active first level is a circuit-analysis task with no MCU or LED', () => {
-  assert.deepEqual(levelIds, [1]);
+  assert.deepEqual(levelIds, [1, 2]);
   assert.equal(getLevel(null).id, 1);
   assert.equal(getLevel(1).title, '分流节点');
   assert.equal(getLevel(5).id, 1);
-  assert.equal(getNextLevel(1), null);
+  assert.equal(getNextLevel(1).id, 2);
+  assert.equal(getNextLevel(2), null);
   assert.equal(getLevel(1).model, 'resistor-dc-v1');
   assert.deepEqual(getLevel(1).circuit.resistors, ['r1', 'r2', 'r3']);
   assert.equal(getLevel(1).circuit.nodeA, 'nodeA');
   assert.ok(getLevel(1).parts.every(part => !['mcu', 'led'].includes(part.id)));
+});
+
+test('level 2 is a dual-fault diagnosis task on a four-resistor series chain', () => {
+  const level = getLevel(2);
+  assert.equal(level.model, 'resistor-dc-v1');
+  assert.equal(level.title, '故障定位');
+  assert.deepEqual(level.board.fixedParts, ['power', 'nodeA', 'ground', 'r1', 'r2', 'r3', 'r4']);
+  assert.equal(level.circuit.solutionWires.length, 6);
+  assert.equal(level.circuit.hiddenOpenCandidates.length, 6);
+  assert.deepEqual(level.circuit.hiddenShortCandidates, ['r1', 'r2', 'r3', 'r4']);
+  assert.deepEqual(level.circuit.resistors, ['r1', 'r2', 'r3', 'r4']);
+  assert.deepEqual(level.electrical.defaultOhms, level.electrical.referenceOhms);
+  assert.equal(level.goals.length, 1);
+  assert.equal(level.goals[0].id, 'diagnose');
+  assert.equal(level.knowledge.length, 2);
+  const game = startGame(false, level);
+  assert.ok(['power', 'nodeA', 'ground', 'r1', 'r2', 'r3', 'r4'].every(id => game.placed[id]));
+  assert.equal(game.visualWires.length, 6);
+  assert.ok(['open', 'short'].includes(game.faultKind));
+  assert.deepEqual(game.suspectedWires, []);
+  assert.equal(game.suspectedShort, null);
+  if (game.faultKind === 'open') {
+    assert.equal(game.wires.length, 5);
+    assert.ok(!game.wires.includes(game.hiddenOpenWire));
+    assert.ok(game.visualWires.includes(game.hiddenOpenWire));
+  } else {
+    assert.equal(game.wires.length, 7);
+    assert.ok(game.wires.includes(game.hiddenShortWire));
+    assert.ok(!game.visualWires.includes(game.hiddenShortWire));
+  }
 });
 
 test('each resistor has an independent parameter menu and current state', () => {

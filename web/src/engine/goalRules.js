@@ -34,6 +34,11 @@ export function evaluateGoals(level, game, currentPath, normalizeWire, probe = n
       return Number.isFinite(value) && value >= condition.metricBetween.min && value <= condition.metricBetween.max;
     }
     if (condition.networkSafe) return context?.networkSafe === true;
+    if (condition.suspectOpenWires) {
+      const truth = new Set((level.circuit.hiddenOpenWires || []).map(normalizeWire));
+      const player = new Set((game.suspectedWires || []).map(normalizeWire));
+      return truth.size > 0 && truth.size === player.size && [...truth].every(key => player.has(key));
+    }
     if (condition.probeAt) return probe?.target === condition.probeAt && game.placed[condition.probeAt.split('.')[0]];
     if (condition.pathKind) return currentPath?.kind === condition.pathKind;
     if (condition.goal) return evaluateGoal(condition.goal);

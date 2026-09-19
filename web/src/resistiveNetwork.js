@@ -25,8 +25,13 @@ function solveLinear(matrix, values) {
 }
 
 export function solveResistiveNetwork(game, level) {
+  // Player may drop more resistors than the declared slots (r1, r2, r3...):
+  // treat every placed rN component as a network resistor.
+  const placedResistorIds = Object.keys(game.placed)
+    .filter(id => game.placed[id] && /^r\d+$/.test(id));
+  const resistorIds = [...new Set([...(level.circuit.resistors || []).filter(id => game.placed[id]), ...placedResistorIds])];
   const terminals = [level.circuit.source, level.circuit.nodeA, level.circuit.ground,
-    ...level.circuit.resistors.flatMap(id => [`${id}.a`, `${id}.b`])]
+    ...resistorIds.flatMap(id => [`${id}.a`, `${id}.b`])]
     .filter(terminal => game.placed[partOf(terminal)]);
   const parent = new Map(terminals.map(terminal => [terminal, terminal]));
   const root = terminal => {
@@ -39,7 +44,7 @@ export function solveResistiveNetwork(game, level) {
   const source = root(level.circuit.source);
   const ground = root(level.circuit.ground);
   const shorted = Boolean(source && ground && source === ground);
-  const resistors = level.circuit.resistors.map(id => ({
+  const resistors = resistorIds.map(id => ({
     id, a: root(`${id}.a`), b: root(`${id}.b`), ohms: game.resistorValues?.[id] ?? null,
   })).filter(item => item.a && item.b && finite(item.ohms) && item.ohms > 0);
   const nodes = [...new Set(terminals.map(root))];
@@ -86,8 +91,8 @@ export function solveResistiveNetwork(game, level) {
     }
   }
 
-  const resistorResults = Object.fromEntries(level.circuit.resistors.map(id => [id, {
-    ohms: game.resistorValues?.[id] ?? null, currentMa: null, powerW: null, direction: 'forward',
+  const resistorResults = Object.fromEntries(resistorIds.map(id => [id, {
+    ohms: game.resistorValues?.[id] ?? null, currentMa: null, powerW: null, direction: 'forward', bypassed: false,
   }]));
   for (const item of resistors) {
     const va = voltages.get(item.a);
@@ -99,6 +104,7 @@ export function solveResistiveNetwork(game, level) {
       ohms: item.ohms, currentMa: Math.abs(signedCurrentMa), signedCurrentMa,
       powerW: (signedCurrentMa / 1000) ** 2 * item.ohms,
       direction: signedCurrentMa >= 0 ? 'forward' : 'reverse',
+      bypassed: item.a === item.b,
     };
   }
   const totalCurrentMa = shorted || !source ? null : resistors.reduce((sum, item) => {
@@ -164,11 +170,11 @@ export function solveResistiveNetwork(game, level) {
     totalCurrentMa,
     equivalentOhms: finite(totalCurrentMa) && totalCurrentMa > 1e-9
       ? level.electrical.sourceV / (totalCurrentMa / 1000) : null,
-    ...Object.fromEntries(level.circuit.resistors.map(id => [`${id}CurrentMa`, resistorResults[id]?.currentMa ?? null])),
-    ...Object.fromEntries(level.circuit.resistors.map(id => [`${id}DropV`,
+    ...Object.fromEntries(resistorIds.map(id => [`${id}CurrentMa`, resistorResults[id]?.currentMa ?? null])),
+    ...Object.fromEntries(resistorIds.map(id => [`${id}DropV`,
       finite(voltageAt(`${id}.a`)) && finite(voltageAt(`${id}.b`))
         ? Math.abs(voltageAt(`${id}.a`) - voltageAt(`${id}.b`)) : null])),
     kclErrorMa,
-    allSelected: level.circuit.resistors.every(id => finite(game.resistorValues?.[id])),
+    allSelected: resistorIds.filter(id => game.placed[id]).every(id => finite(game.resistorValues?.[id])),
   };
 }

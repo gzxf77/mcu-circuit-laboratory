@@ -21,3 +21,7 @@ web/.env.*
 
 # Local GitHub deployment credentials
 .local-keys/
+
+# Copyrighted textbook (large scanned PDF) and local debug scripts
+电路 第6版 (邱关源).pdf
+web/repro.mjs
