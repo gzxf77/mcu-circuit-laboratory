@@ -1,14 +1,14 @@
 // Level files are data, not executable rules. New component types and electrical
 // models are registered in the engine once and then reused by level data.
-import { boardToolIds, componentCatalog } from '../componentCatalog.js';
+import { boardToolIds, componentCatalog, componentSpec } from '../componentCatalog.js';
 
 const knownParts = new Set(Object.keys(componentCatalog));
 const knownTools = new Set(boardToolIds);
-const conditionTypes = new Set(['all', 'any', 'placed', 'wire', 'orientation', 'allowedWires', 'currentUnder', 'currentBetween', 'resistorPowerUnder', 'resistorSelected', 'resistorValuesSelected', 'metricBetween', 'networkSafe', 'probeAt', 'pathKind', 'goal', 'suspectOpenWires', 'diagnoseFault']);
+const conditionTypes = new Set(['all', 'any', 'placed', 'wire', 'orientation', 'allowedWires', 'currentUnder', 'currentBetween', 'resistorPowerUnder', 'resistorSelected', 'resistorValuesSelected', 'metricBetween', 'networkSafe', 'branchCurrentsWithin', 'probeAt', 'pathKind', 'powerJudged', 'goal']);
 
 const assert = (valid, message) => { if (!valid) throw new Error('Invalid level: ' + message); };
 const endpointPart = endpoint => endpoint.split('.')[0];
-const validEndpoint = endpoint => Boolean(componentCatalog[endpointPart(endpoint)]?.terminals[endpoint]);
+const validEndpoint = endpoint => Boolean(componentSpec(endpointPart(endpoint))?.terminals[endpoint]);
 
 function validateCondition(condition, goalIds, partIds) {
   assert(condition && typeof condition === 'object' && !Array.isArray(condition), 'goal condition must be an object');
@@ -35,10 +35,18 @@ function validateCondition(condition, goalIds, partIds) {
     assert(value && Number.isFinite(value.min) && value.min >= 0 && Number.isFinite(value.max) && value.max > value.min, 'invalid current range');
   } else if (type === 'metricBetween') {
     assert(value && typeof value.key === 'string' && Number.isFinite(value.min) && Number.isFinite(value.max) && value.max > value.min, 'invalid metric range');
+  } else if (type === 'branchCurrentsWithin') {
+    assert(Array.isArray(value) && value.length > 0 && value.length <= 6, 'branch current ranges are required');
+    for (const range of value) {
+      assert(range && Number.isFinite(range.min) && Number.isFinite(range.max) && range.min >= 0 && range.max > range.min, 'invalid branch current range');
+    }
   } else if (type === 'probeAt') {
     assert(typeof value === 'string' && partIds.has(endpointPart(value)) && validEndpoint(value), 'invalid probe target');
   } else if (type === 'pathKind') {
     assert(typeof value === 'string', 'invalid path kind');
+  } else if (type === 'powerJudged') {
+    assert(value && typeof value.id === 'string' && partIds.has(value.id), 'invalid power judgement element');
+    assert(value.expect === 'absorb' || value.expect === 'deliver', 'invalid power judgement');
   } else {
     assert(value === true, type + ' must be true');
   }
@@ -51,14 +59,22 @@ export function defineLevel(level) {
   assert(typeof level.initialReversed === 'boolean', 'initialReversed must be a boolean');
   assert(Array.isArray(level.parts) && level.parts.length > 0, 'parts are required');
   assert(new Set(level.parts.map(part => part.id)).size === level.parts.length, 'duplicate part id');
-  const partIds = new Set(level.parts.filter(part => knownParts.has(part.id)).map(part => part.id));
-  assert(level.parts.every(part => knownParts.has(part.id) || knownTools.has(part.id)), 'unsupported part');
+  const partIds = new Set(level.parts.filter(part => knownParts.has(part.id) || componentSpec(part.id)).map(part => part.id));
+  assert(level.parts.every(part => knownParts.has(part.id) || componentSpec(part.id) || knownTools.has(part.id)), 'unsupported part');
   assert(level.parts.some(part => part.id === 'probe'), 'probe tool is required');
-  assert(Array.isArray(level.board?.fixedParts || []) && (level.board?.fixedParts || []).every(id => partIds.has(id)), 'fixed parts must be listed components');
+  // A level may also fix a resistor it declares itself — for example the load a
+  // supply has to drive, which must stay on the board and keep its value.
+  const declaredResistorIds = new Set([...(level.circuit?.resistorSlots || []), ...(level.circuit?.resistors || [])]);
+  assert(Array.isArray(level.board?.fixedParts || []) && (level.board?.fixedParts || []).every(id => partIds.has(id) || declaredResistorIds.has(id)), 'fixed parts must be listed components or declared resistors');
   const electrical = level.electrical;
   if (level.model === 'resistor-dc-v1') {
-    assert(Number.isFinite(electrical?.sourceV) && electrical.sourceV > 0, 'source voltage must be positive');
     assert(Number.isFinite(electrical.resistorRatedPowerW) && electrical.resistorRatedPowerW > 0, 'resistor rated power must be positive');
+    if (electrical.resistorRatingOptionsW) {
+      assert(Array.isArray(electrical.resistorRatingOptionsW) && electrical.resistorRatingOptionsW.length > 0
+        && electrical.resistorRatingOptionsW.every(value => Number.isFinite(value) && value > 0), 'invalid resistor rating choices');
+      assert(electrical.resistorRatingOptionsW.includes(electrical.resistorRatedPowerW), 'the default rating must be an available choice');
+    }
+    assert(electrical.scopeMaxV === undefined || (Number.isFinite(electrical.scopeMaxV) && electrical.scopeMaxV > 0), 'scope full scale must be positive');
     assert(Array.isArray(electrical.resistorOptionsOhms) && electrical.resistorOptionsOhms.length > 0 && electrical.resistorOptionsOhms.every(value => Number.isFinite(value) && value > 0), 'invalid resistor choices');
     const genericSlots = Array.isArray(level.circuit.resistorSlots) && level.circuit.resistorSlots.length;
     const hasGenericResistor = genericSlots && partIds.has('resistor');
@@ -67,8 +83,35 @@ export function defineLevel(level) {
     const referenceOnly = !genericSlots;
     assert(level.circuit?.resistors?.length >= 2 && level.circuit.resistors.every(id => referenceOnly || hasGenericResistor || partIds.has(id)), 'resistor parts are required');
     assert(level.circuit.resistors.every(id => Number.isFinite(electrical.referenceOhms?.[id]) && electrical.referenceOhms[id] > 0), 'reference resistor values are required');
-    assert(level.circuit.resistors.every(id => electrical.resistorOptionsOhms.includes(electrical.defaultOhms?.[id])), 'default resistor values must be available choices');
-    assert(partIds.has(level.circuit.source) && partIds.has(level.circuit.ground), 'source and ground are required');
+    // A fixed part (the load a supply must drive) needs no player-facing choice:
+    // its value is part of the problem statement.
+    assert(level.circuit.resistors.every(id => (level.board?.fixedParts || []).includes(id)
+      || electrical.resistorOptionsOhms.includes(electrical.defaultOhms?.[id])), 'default resistor values must be available choices');
+    assert(partIds.has(level.circuit.ground), 'ground is required');
+    // A level drives its network with a fixed node voltage, a fixed node current,
+    // or both at once (one source fixes U and lets the network set I, the other
+    // does the opposite).
+    const voltageSource = level.circuit.source || null;
+    const currentSource = level.circuit.currentSource || null;
+    assert(voltageSource || currentSource, 'a level needs a voltage source or a current source');
+    if (voltageSource) {
+      assert(Number.isFinite(electrical.sourceV) && electrical.sourceV > 0, 'source voltage must be positive');
+      assert(partIds.has(voltageSource), 'source is required');
+    }
+    if (currentSource) {
+      assert(Number.isFinite(electrical.sourceCurrentMa) && electrical.sourceCurrentMa > 0, 'source current must be positive');
+      assert(partIds.has(currentSource.id), 'current source part is required');
+      assert(endpointPart(currentSource.out) === currentSource.id && validEndpoint(currentSource.out), 'invalid current source output terminal');
+      assert(endpointPart(currentSource.in) === currentSource.id && validEndpoint(currentSource.in), 'invalid current source return terminal');
+    }
+    const controlledSource = level.circuit.controlledSource || null;
+    if (controlledSource) {
+      assert(Number.isFinite(electrical.controlledTransconductanceMs) && electrical.controlledTransconductanceMs > 0, 'controlled transconductance must be positive');
+      assert(partIds.has(controlledSource.id), 'controlled source part is required');
+      assert(endpointPart(controlledSource.out) === controlledSource.id && validEndpoint(controlledSource.out), 'invalid controlled source output terminal');
+      assert(endpointPart(controlledSource.in) === controlledSource.id && validEndpoint(controlledSource.in), 'invalid controlled source return terminal');
+      assert(controlledSource.control && validEndpoint(controlledSource.control.positive) && validEndpoint(controlledSource.control.negative), 'controlled source needs two control terminals');
+    }
     assert(partIds.has(endpointPart(level.circuit.nodeA)) && validEndpoint(level.circuit.nodeA), 'node A endpoint is required');
     const libraryOnlyIds = partIds.has('resistor') ? ['resistor'] : [];
     assert(level.board?.positions && [...partIds].filter(id => !libraryOnlyIds.includes(id)).every(id => Number.isFinite(level.board.positions[id]?.x) && Number.isFinite(level.board.positions[id]?.y)), 'every part needs a board position');
@@ -83,18 +126,6 @@ export function defineLevel(level) {
     for (const wire of level.circuit.initialWires || []) {
       const pins = wire.split('-');
       assert(pins.length === 2 && pins.every(wireEndOk), 'invalid initial wire ' + wire);
-    }
-    assert(Array.isArray(level.circuit.hiddenOpenWires || []), 'hidden open wires must be an array');
-    for (const wire of level.circuit.hiddenOpenWires || []) {
-      assert(level.circuit.solutionWires.includes(wire), 'hidden open wire must be a solution wire: ' + wire);
-    }
-    assert(Array.isArray(level.circuit.hiddenOpenCandidates || []), 'hidden open candidates must be an array');
-    for (const wire of level.circuit.hiddenOpenCandidates || []) {
-      assert(level.circuit.solutionWires.includes(wire), 'hidden open candidate must be a solution wire: ' + wire);
-    }
-    assert(Array.isArray(level.circuit.hiddenShortCandidates || []), 'hidden short candidates must be an array');
-    for (const resistorId of level.circuit.hiddenShortCandidates || []) {
-      assert((level.circuit.resistors || []).includes(resistorId), 'hidden short candidate must be a resistor: ' + resistorId);
     }
     assert(Array.isArray(level.goals) && level.goals.length > 0, 'goals are required');
     const goalIds = new Set(level.goals.map(goal => goal.id));

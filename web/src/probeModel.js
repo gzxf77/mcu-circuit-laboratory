@@ -34,11 +34,30 @@ function readResistorProbe(game, report, probe, level) {
   };
   const target = probe.target;
   const id = target?.split('.')[0];
-  const pointLabel = target === level.circuit.source ? '电源正端'
+  const controlled = level.circuit.controlledSource;
+  const sourceTerminal = controlled && target === controlled.out ? '受控源流出端'
+    : controlled && target === controlled.in ? '受控源流回端'
+      : level.circuit.currentSource
+        ? target === level.circuit.currentSource.out ? '电流源流出端'
+          : target === level.circuit.currentSource.in ? '电流源流回端' : null
+        : target === level.circuit.source ? '电源正端' : null;
+  const namedNodeSuffix = (target, node) => target === node ? ''
+    : '（' + id.toUpperCase() + (target.endsWith('.a') ? ' 左端' : ' 右端') + '）';
+  const namedNode = target
+    ? [['节点 A', level.circuit.nodeA], ['节点 B', level.circuit.nodeB]]
+      .find(([, node]) => node && wirePath(game, node, target) !== null)
+    : null;
+  const pointLabel = sourceTerminal ? sourceTerminal
     : target === level.circuit.ground ? 'GND'
-      : target && wirePath(game, level.circuit.nodeA, target) !== null ? '节点 A' + (target === level.circuit.nodeA ? '' : '（' + id.toUpperCase() + (target.endsWith('.a') ? ' 左端' : ' 右端') + '）')
-      : target ? id.toUpperCase() + (target.endsWith('.a') ? ' 左端' : ' 右端') : '未接触电路';
+      : namedNode ? namedNode[0] + namedNodeSuffix(target, namedNode[1])
+        : target ? id.toUpperCase() + (target.endsWith('.a') ? ' 左端' : ' 右端') : '未接触电路';
+  // An ideal current source with its terminals tied together has no defined
+  // voltage, and a shorted voltage source stops the solve: never show 0 V there.
+  // An open current-source loop still has honest node voltages, because they are
+  // then set only by the resistor paths to GND.
+  const unreadable = report.network.shorted || report.network.currentSourceShorted;
   const voltageV = target ? report.network.voltageAt(target) : null;
+  const voltageKnown = Number.isFinite(voltageV);
   const branch = report.network.resistorResults[id];
   const wireCurrent = probe.wire && report.network.wireCurrents[probe.wire];
   // Probe on a plain wire node (e.g. node A): read the currents of wires touching
@@ -48,22 +67,28 @@ function readResistorProbe(game, report, probe, level) {
     .filter(w => w && (w.from === target || w.to === target))
     .map(w => w.currentMa).filter(Number.isFinite);
   const nodeWireCurrent = touching.length ? Math.max(...touching) : null;
-  const currentMa = !target || report.network.shorted ? null
+  const onControlledTerminal = Boolean(controlled) && (target === controlled.out || target === controlled.in);
+  const onSourceTerminal = Boolean(sourceTerminal);
+  const currentMa = !target || unreadable ? null
+    : onControlledTerminal && Number.isFinite(report.network.controlledSourceCurrentMa) ? report.network.controlledSourceCurrentMa
     : wireCurrent ? wireCurrent.currentMa
       : probe.wire ? 0
-        : branch?.currentMa ?? nodeWireCurrent ?? (target === level.circuit.source || target === level.circuit.ground
+        : branch?.currentMa ?? nodeWireCurrent ?? (onSourceTerminal || target === level.circuit.ground
           ? report.network.totalCurrentMa : 0);
   return {
     pointLabel, target,
-    voltageV: Number.isFinite(voltageV) ? voltageV : null,
-    voltageLabel: report.network.shorted ? '短路' : Number.isFinite(voltageV) ? voltageText(voltageV) : target ? '悬空/未求解' : '未接触',
+    voltageV: voltageKnown ? voltageV : null,
+    voltageLabel: report.network.shorted ? '短路' : report.network.currentSourceShorted ? '未求解'
+      : voltageKnown ? voltageText(voltageV) : target ? '悬空/未求解' : '未接触',
     currentMa: Number.isFinite(currentMa) ? currentMa : null,
     currentLabel: !target ? '—' : Number.isFinite(currentMa) ? currentMa.toFixed(2) + ' mA' : '无法确定',
     currentDetail: !target ? '探针尚未接触导线或端点。' : '电流是该端点所属元件或导线支路的模型估算；理想导线环路中的分流不能唯一确定。',
-    waveform: Number.isFinite(voltageV) && !report.network.shorted ? 'flat' : 'unknown',
-    detail: report.network.shorted ? '电源短路，停止求解。'
-      : Number.isFinite(voltageV) ? '相对 GND 的直流电压；支路电流由欧姆定律与 KCL 求得。'
-        : '该节点未形成可确定电位的连接，不能当作 0 V。',
+    waveform: voltageKnown && !unreadable ? 'flat' : 'unknown',
+    detail: report.network.currentSourceShorted ? '电流源两端短接，停止求解。'
+      : report.network.shorted ? '电源短路，停止求解。'
+        : report.network.unresolved ? '电流源回路未闭合到 GND，源电流无法流通；此电压只由电阻网络与 GND 的连接决定。'
+          : voltageKnown ? '相对 GND 的直流电压；支路电流由欧姆定律与 KCL 求得。'
+            : '该节点未形成可确定电位的连接，不能当作 0 V。',
   };
 }
 

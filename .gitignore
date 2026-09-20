@@ -25,3 +25,6 @@ web/.env.*
 # Copyrighted textbook (large scanned PDF) and local debug scripts
 电路 第6版 (邱关源).pdf
 web/repro.mjs
+
+# Local DSH profile backup for the code-review plugin install
+.dsh-profile-backup/

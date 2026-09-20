@@ -34,12 +34,38 @@ export function evaluateGoals(level, game, currentPath, normalizeWire, probe = n
       return Number.isFinite(value) && value >= condition.metricBetween.min && value <= condition.metricBetween.max;
     }
     if (condition.networkSafe) return context?.networkSafe === true;
-    if (condition.suspectOpenWires) {
-      const truth = new Set((level.circuit.hiddenOpenWires || []).map(normalizeWire));
-      const player = new Set((game.suspectedWires || []).map(normalizeWire));
-      return truth.size > 0 && truth.size === player.size && [...truth].every(key => player.has(key));
+    if (condition.branchCurrentsWithin) {
+      // Each range must be satisfied by one measured parallel branch, in any
+      // order, and the branch count must match — "分成 4 mA 与 2 mA 两条支路".
+      const currents = Array.isArray(context?.branchCurrentsMa) ? context.branchCurrentsMa : [];
+      const ranges = condition.branchCurrentsWithin;
+      if (currents.length !== ranges.length) return false;
+      const used = currents.map(() => false);
+      const match = index => {
+        if (index === ranges.length) return true;
+        for (let position = 0; position < currents.length; position++) {
+          if (used[position]) continue;
+          const value = currents[position];
+          if (value < ranges[index].min || value > ranges[index].max) continue;
+          used[position] = true;
+          if (match(index + 1)) return true;
+          used[position] = false;
+        }
+        return false;
+      };
+      return match(0);
     }
     if (condition.probeAt) return probe?.target === condition.probeAt && game.placed[condition.probeAt.split('.')[0]];
+    if (condition.powerJudged) {
+      // A judgement goal: the player states, for one element, whether it absorbs
+      // or delivers power. The built circuit must actually produce that sign, so
+      // guessing right on a wrong circuit does not pass.
+      const { id, expect } = condition.powerJudged;
+      const powerMw = context?.elementPowerMw?.[id];
+      if (!Number.isFinite(powerMw)) return false;
+      const truth = powerMw >= 0 ? 'absorb' : 'deliver';
+      return truth === expect && game.powerJudging?.[id] === expect;
+    }
     if (condition.pathKind) return currentPath?.kind === condition.pathKind;
     if (condition.goal) return evaluateGoal(condition.goal);
     throw new Error('Unsupported goal condition');

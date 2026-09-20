@@ -1,16 +1,39 @@
-import { componentParameters, componentStatusText } from './componentParameters.js';
+import { componentParameters, componentStatusText, powerReferenceText } from './componentParameters.js';
 import { useState } from 'react';
 import { pointerTrace } from './pointerTrace';
 
-export function PartParameterMenu({ id, level, game, componentState, placement = false, onChooseResistor, onFlipLed, onRemove, onClose, onUseWire }) {
+export function PartParameterMenu({ id, level, game, componentState, placement = false, onChooseResistor, onFlipLed, onRemove, onClose, onUseWire, onJudgePower, judgedPower, onTuneGain, onChooseRating }) {
   const info = componentParameters(id, level, game);
   const [optionsOpen, setOptionsOpen] = useState(placement);
   const stateText = placement ? null : componentStatusText(id, componentState);
+  const referenceText = placement || !onJudgePower ? null : powerReferenceText(id, level, componentState);
   return <div className="parameter-menu" role="group" aria-label={info.title + '参数与操作'} onPointerDown={event => { pointerTrace('menu-down', { id, target: event.target.tagName, x: event.clientX, y: event.clientY }); event.stopPropagation(); }} onClick={event => event.stopPropagation()}>
     <div className="parameter-menu-title"><strong>{info.title} · 参数</strong><button type="button" aria-label="关闭元件选单" onClick={onClose}>×</button></div>
     <div className="parameter-value">{info.value}</div>
     {stateText && <div className={'parameter-status ' + (['burned', 'burst', 'overload'].includes(componentState.state) ? 'fault' : '')}>{stateText}</div>}
     {placement && <p>{info.detail}</p>}
+    {!placement && info.gain && onTuneGain && <div className="gain-tuner" role="group" aria-label="调节跨导">
+      <label htmlFor={'gain-' + id}>{info.gain.label}<strong>{info.gain.value.toFixed(2)} mS</strong></label>
+      <input id={'gain-' + id} type="range" min={info.gain.min} max={info.gain.max} step={info.gain.step}
+        value={info.gain.value} aria-label="跨导 g，单位毫西"
+        onChange={event => onTuneGain(id, Number(event.target.value))} />
+      <small>拖动滑块改变跨导：输出电流 I = g·U控制 会随读数实时变化。</small>
+    </div>}
+    {!placement && onJudgePower && <div className="power-judge" role="group" aria-label="功率判断">
+      <div className="power-judge-readings">{referenceText}</div>
+      <div className="power-judge-options">
+        <button type="button" className={judgedPower === 'absorb' ? 'chosen' : ''} aria-pressed={judgedPower === 'absorb'} onClick={() => onJudgePower(id, 'absorb')}>吸收功率</button>
+        <button type="button" className={judgedPower === 'deliver' ? 'chosen' : ''} aria-pressed={judgedPower === 'deliver'} onClick={() => onJudgePower(id, 'deliver')}>释放功率</button>
+      </div>
+      <small>按参考方向算出 P = U·I（关联）或 P = −U·I（非关联）：P &gt; 0 吸收，P &lt; 0 释放。</small>
+    </div>}
+    {info.ratings && onChooseRating && <div className="parameter-ratings" role="group" aria-label="选择额定功率">
+      <span>{info.ratings.label}</span>
+      {info.ratings.options.map(watts => <button key={watts} type="button"
+        className={Math.abs((info.ratings.value ?? 0) - watts) < 1e-9 ? 'chosen' : ''}
+        aria-pressed={Math.abs((info.ratings.value ?? 0) - watts) < 1e-9}
+        onClick={() => onChooseRating(id, watts)}>{(watts * 1000).toFixed(0)} mW</button>)}
+    </div>}
     {info.options && optionsOpen && <div className="parameter-options" role="group" aria-label="选择电阻阻值">{info.options.map(ohms => <button key={ohms} type="button" className={(info.selectedOhms ?? game.resistorOhms) === ohms ? 'chosen' : ''} aria-pressed={(info.selectedOhms ?? game.resistorOhms) === ohms} onClick={() => onChooseResistor(id, ohms)}>{ohms} Ω</button>)}</div>}
     <div className="parameter-menu-actions">
       {placement ? <>
