@@ -13,19 +13,26 @@ export const normalizeWire = wire => wireKey(...wire.split('-'));
 // Every power judgement a level asks for, as { id, expect }. The reference
 // (solved) state answers them all, so the level's own reference build clears
 // through exactly the same code path as the player's.
-function judgedGoals(level) {
-  const judged = [];
+// Collects every judgement of one predicate kind from the level goals, as
+// { id: expect }. Used to seed the reference (solved) state.
+function collectJudged(level, key) {
+  const out = {};
   const visit = condition => {
     if (!condition || typeof condition !== 'object') return;
-    if (condition.powerJudged) judged.push(condition.powerJudged);
-    for (const key of ['all', 'any']) (condition[key] || []).forEach(visit);
+    if (condition[key]) out[condition[key].id] = condition[key].expect;
+    for (const k of ['all', 'any']) (condition[k] || []).forEach(visit);
   };
   (level.goals || []).forEach(goal => visit(goal.when));
-  return judged;
+  return out;
+}
+
+function judgedGoals(level) {
+  return Object.entries(collectJudged(level, 'powerJudged'))
+    .map(([id, expect]) => ({ id, expect }));
 }
 
 function judgedAnswers(level) {
-  return Object.fromEntries(judgedGoals(level).map(item => [item.id, item.expect]));
+  return collectJudged(level, 'powerJudged');
 }
 
 export function startGame(solved = false, level = defaultLevel) {
@@ -50,8 +57,24 @@ export function startGame(solved = false, level = defaultLevel) {
       ? Object.fromEntries(level.circuit.resistors.map(id => [id, solved ? level.electrical.referenceOhms[id] : level.electrical.defaultOhms[id]]))
       : {},
     positions: structuredClone(level.board.positions),
-    // Player's absorbed/delivered power judgement, per element id.
+    // Player's power judgements, per element id: actual absorb/deliver, plus the
+    // textbook (1) reference-direction association and (2) what ui means.
     powerJudging: solved ? judgedAnswers(level) : {},
+    powerValue: solved ? Object.fromEntries(level.goals.flatMap(g => (g.when?.all||[]).filter(c => c.powerValueJudged).map(c => [c.powerValueJudged.id, c.powerValueJudged.expect]))) : {},
+    assocJudging: solved ? collectJudged(level, 'assocJudged') : {},
+    uiMeaningJudging: solved ? collectJudged(level, 'uiMeaningJudged') : {},
+    // 随机电流方向：每次进入随机右/左；参考解固定向右。
+    ...((level.ui?.randomDirection || level.abstract?.randomDirection)
+      ? { iDir: solved ? 'right' : (Math.random() < 0.5 ? 'right' : 'left') } : {}),
+    // 随机 u、i 符号（正负都有）；参考解取同号使 P=ui>0。
+    ...(level.randomSigns
+      ? { judgementSigns: Object.fromEntries(Object.keys(level.randomSigns).map(id =>
+          [id, solved ? { u: 1, i: 1 } : { u: Math.random() < 0.5 ? 1 : -1, i: Math.random() < 0.5 ? 1 : -1 }])) }
+      : {}),
+    // 随机只问其中一个元件：参考解按全部正确答。
+    ...(level.randomPick
+      ? { picked: solved ? level.randomPick[0] : level.randomPick[Math.floor(Math.random() * level.randomPick.length)] }
+      : {}),
     // Player-chosen rated power per resistor; missing means the level default.
     resistorRatings: {},
     // A tunable transconductance starts at the level's default, never at the
@@ -119,7 +142,26 @@ function evaluateResistorDc(game, level, probe) {
   const networkSafe = !network.shorted && !network.currentSourceShorted && !network.unresolved && network.allSelected &&
     resistorResults.every(item => Number.isFinite(item.currentMa) && item.currentMa > 1e-6 && item.powerW <= rated) &&
     Number.isFinite(network.totalCurrentMa) && network.kclErrorMa < 0.01;
-  const metrics = { ...network, networkSafe };
+  // Which judged elements are drawn with the current arrow entering the + terminal
+  // (associated). Resistors are associated; voltage/current sources are not. This is
+  // the truth behind 题1-1(1)(2): association decides whether P=ui or P=-ui.
+  const association = {};
+  const markAssoc = condition => {
+    if (!condition || typeof condition !== 'object') return;
+    for (const kind of ['powerJudged', 'assocJudged', 'uiMeaningJudged']) {
+      if (condition[kind]) {
+        const jid = condition[kind].id;
+        let truth = level.judgedAssociation?.[jid];
+        if (truth === undefined) truth = /^r\d+$/.test(jid);
+        const randDir = level.ui?.randomDirection || level.abstract?.randomDirection;
+        if (randDir && (game.iDir || 'right') === 'left') truth = !truth;
+        association[jid] = truth;
+      }
+    }
+    for (const key of ['all', 'any']) (condition[key] || []).forEach(markAssoc);
+  };
+  level.goals.forEach(goal => markAssoc(goal.when));
+  const metrics = { ...network, networkSafe, association };
   const checks = evaluateGoals(level, game, null, normalizeWire, probe, metrics);
   const success = checks.every(Boolean);
   const flowEdges = Object.values(network.wireCurrents).map(item => [item.from, item.to]);
@@ -168,6 +210,31 @@ function evaluateResistorDc(game, level, probe) {
   const result = (kind, headline, observed, explanation, nextStep) => ({
     ...base, kind, headline, observed, explanation, nextStep, message: headline,
   });
+  // 纯判断题（题1-1 这类）：判错时给出针对参考方向的提示，不要套用测量关卡那套"节点 A / 总电流"话术。
+  if (level.ui?.judgeOnly && !success) {
+    const wrong = [];
+    const walk = cond => {
+      if (!cond || typeof cond !== 'object') return;
+      if (cond.assocJudged) {
+        const { id } = cond.assocJudged;
+        const truth = association[id] ? 'in' : 'out';
+        const pick = game.assocJudging?.[id];
+        if (!pick || pick !== truth) wrong.push(elementLabel(id) + '：电流 i 的端子方向');
+      }
+      if (cond.uiMeaningJudged) {
+        const { id } = cond.uiMeaningJudged;
+        const truth = association[id] ? 'absorb' : 'deliver';
+        const pick = game.uiMeaningJudging?.[id];
+        if (!pick || pick !== truth) wrong.push(elementLabel(id) + '：ui 乘积的功率含义');
+      }
+      for (const key of ['all', 'any']) (cond[key] || []).forEach(walk);
+    };
+    level.goals.forEach(g => walk(g.when));
+    return result('target-mismatch', '参考方向判断还没全部正确',
+      '还没选对的有：' + (wrong.length ? wrong.join('；') : '请把每张卡片的两项都选上。'),
+      '先看电流 i 的箭头是从标 + 的端子流入还是流出：流入为关联，ui 表示吸收功率；流出为非关联，ui 表示发出功率。',
+      '对照图上的 +/− 极性和 i 箭头，把错选的那项改过来，再点「检查电路」。');
+  }
   // A fault means the build is not a valid answer yet, so no goal may be
   // credited: the checklist can never read "2 / 2" while 检查电路 rejects the
   // circuit. A plain wrong value (target-mismatch) keeps its real checklist,

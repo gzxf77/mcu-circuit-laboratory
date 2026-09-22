@@ -6,7 +6,7 @@ const positions = {
 };
 const solutionWires = ['power-mcu.vdd', 'mcu.gnd-ground', 'mcu.gpio-resistor.a', 'resistor.b-led.a', 'led.b-ground'];
 
-// One circuit family can be configured for later lessons without per-level UI logic.
+// Legacy gpio-led template, kept as a separate valid level factory (also covered by tests).
 export function makeGpioLedLevel({
   id, title, chapter, chapterSubtitle, story, voltageV, ledForwardV,
   resistorOhms = null, resistorOptionsOhms = null, warningCurrentMa,
@@ -48,174 +48,190 @@ export function makeGpioLedLevel({
   });
 }
 
+// 第 1 章重做：严格按邱关源《电路》第 6 版习题逐题游戏化。
+// 第 1 关 = 习题 1-1：二端元件的参考方向（关联/非关联）与功率符号。
+// 关卡电路已预接好（题1-1 给出的是图，不需要玩家搭建），玩家只需对
+// 电压源（元件）和电阻 R1 分别判断吸收/发出——判断必须与电路真实功率一致。
 export const levels = Object.freeze({
   1: defineLevel({
-    id: 1, model: 'resistor-dc-v1', title: '参考方向与功率', chapter: '第一章 · 电路基础', chapterSubtitle: '谁在吸收，谁在释放',
-    story: '12 V 电源、节点 A、GND 和一只 6 mA 电流源都已固定在搭建区。电源经 R1 给节点 A 供电，R2 从节点 A 接地；电流源也接在节点 A 与 GND 之间——它的两个端子由你决定怎么接。让节点 A 稳定在约 3.0 V，然后判断每个元件此刻是在吸收还是在释放功率：注意"源"不一定在供电。',
-    concept: '同一节点的 KCL：流入节点 A 的电流等于流出的电流，(12 V − U_A)/R1 与电流源的 6 mA 一起，等于 U_A/R2。功率按参考方向判定：电压与电流为关联参考方向时 P = U·I，非关联时 P = −UI；P > 0 表示吸收，P < 0 表示释放。回路里吸收的功率之和等于释放的功率之和。',
+    id: 1,
+    model: 'resistor-dc-v1',
+    title: '题1-1 · 参考方向与功率',
+    chapter: '第一章 · 电路模型和电路定律',
+    chapterSubtitle: '谁在吸收，谁在发出',
+    story: '题1-1：二端元件左端标 +、右端标 −，电压 u 加在两端，电流 i 的箭头方向决定参考方向。本关电路是 12 V 电源经 R1 回到电源——分别看电源和 R1：电流 i 是从标 + 的端子流入还是流出？这又决定了 ui 表示吸收功率还是发出功率。',
+    concept: '关联参考方向：电流从标 + 的端子流入，P = ui，ui 表示吸收功率。非关联：电流从 + 端流出，ui 直接表示发出功率。电阻的电流从 + 端流入，是关联；电压源的电流从 + 端流出，是非关联。',
     knowledge: [
-      { title: '参考方向', formula: '关联：P = U·I\n非关联：P = −U·I',
-        text: '电压极性与电流箭头是人为选定的参考方向。电流从标 + 的端子流入时两者关联，用 P = U·I；从 − 端流入则为非关联，用 P = −U·I。板上电源与电流源的箭头都从 + 端流出，所以是非关联。' },
-      { title: '功率的正负', formula: 'P > 0 吸收\nP < 0 释放',
-        text: '算出正值说明该元件在吸收功率（把电能变成热或其他形式），负值说明它在释放功率（向外供电）。电阻永远是 P = I²R > 0，只吸收。' },
-      { title: '功率守恒', formula: 'ΣP吸收 = ΣP释放',
-        text: '整个电路吸收的功率等于释放的功率。本关参考解：电源释放 108 mW，R1 吸收 81 mW、R2 吸收 9 mW、电流源吸收 18 mW（它被外电路充电）。' },
+      { title: '关联参考方向', formula: '关联：电流从电压 + 端流入、− 端流出\n非关联：电流从 + 端流出、− 端流入',
+        text: '对一个二端元件，先选定电压参考极性（+、−），再选定电流参考方向（箭头）。若电流从 + 端流入、从 − 端流出，称电压、电流取关联参考方向；反之即为非关联。选定关联方向后，功率公式 P = ui 的正负号才能统一解释。' },
+      { title: '功率的吸收与发出', formula: '关联：P = ui，P > 0 吸收，P < 0 发出\n非关联：P = −ui，P > 0 吸收，P < 0 发出',
+        text: '关联参考方向下，P = ui；P > 0 表示元件吸收功率（消耗电能），P < 0 表示发出功率（向外提供电能）。非关联参考方向下则取 P = −ui，判读规则相同。由此可判断元件是在耗能还是在供能。' },
     ],
+    intro: '在电路分析中，当涉及某个元件或部分电路的电流或电压时，必须指定电流或电压的参考方向（有时也称为正方向），才能开始进行分析和计算。在电路中，电流的实际流动方向或电压的实际方向可能是未知的，也可能是随时间变动的。',
     initialReversed: false,
-    board: { fixedParts: ['power', 'isource', 'nodeA', 'ground'], positions: {
-      power: { x: 175, y: 187 }, r1: { x: 345, y: 255 }, nodeA: { x: 493, y: 323 },
-      r2: { x: 570, y: 459 }, isource: { x: 175, y: 527 }, ground: { x: 790, y: 527 },
-    } },
+    // 纯判断题关卡：不搭建、不测量。隐藏元件库/实时测量，板上不显示电压与阻值，
+    // 答题卡并排展示所有待判断元件。
+    ui: { judgeOnly: true, randomDirection: true },
+    // 向右时：r1 关联(in)、power 非关联(out)；向左时整体取反。
+    judgedAssociation: { r1: true, power: false },
+    judgeLabels: { r1: '元件' },
+    // 每次随机 u、i 的正负号。
+    randomSigns: { r1: true },
+    board: {
+      fixedParts: ['power', 'r1', 'ground'],
+      positions: {
+        power: { x: 210, y: 350 },
+        r1: { x: 455, y: 350 },
+        ground: { x: 700, y: 350 },
+      },
+    },
     circuit: {
-      source: 'power', ground: 'ground', nodeA: 'nodeA',
-      currentSource: { id: 'isource', out: 'isource.out', in: 'isource.in' },
-      // This level needs the source to DRAW current from node A, so wiring it the
-      // other way round is a valid answer here, not a reversed-source fault, and
-      // the level asks for a power judgement instead.
-      currentSourcePolarity: 'either',
-      powerJudgement: true,
-      defaultProbeTarget: 'nodeA',
-      flowLabel: '12 V 电源 → R1 → 节点 A → R2 → GND，6 mA 电流源也接在节点 A 与 GND 之间',
-      // Player-facing library shows one generic resistor; each drop takes the next slot.
-      resistors: ['r1', 'r2'], resistorSlots: [],
-      baseWires: [],
-      solutionWires: ['power-r1.a', 'r1.b-nodeA', 'nodeA-r2.a', 'r2.b-ground', 'isource.in-nodeA', 'isource.out-ground'],
+      source: 'power',
+      ground: 'ground',
+      // R1 左端即原节点 A，兼作参考电压点；板上不再单独画节点符号。
+      nodeA: 'r1.a',
+      flowLabel: '12 V 电源 → R1 → GND',
+      // 题1-1 给的是两个参考方向示意图：R1 即图(a)（电流从 + 端流入），
+      // 电源即图(b)（电流从 + 端流出）。电路已预接好，玩家只做参考方向与功率判断。
+      resistors: ['r1'],
+      resistorSlots: [],
+      solutionWires: ['power-r1.a', 'r1.b-ground'],
+      initialWires: ['power-r1.a', 'r1.b-ground'],
     },
     electrical: {
-      sourceV: 12, sourceCurrentMa: 6, scopeMaxV: 15,
-      resistorOptionsOhms: [470, 1000, 1500, 2000, 2200, 3300, 4700],
-      // The defaults deliberately do not solve the level: 1.5 kΩ on both sides
-      // puts node A at 1.5 V, so the player has to change the values as well as
-      // the wiring. The reference build is R1 = R2 = 1 kΩ → 3.0 V.
-      defaultOhms: { r1: 1500, r2: 1500 },
-      referenceOhms: { r1: 1000, r2: 1000 },
+      sourceV: 12,
+      scopeMaxV: 15,
+      resistorOptionsOhms: [1000],
+      defaultOhms: { r1: 1000 },
+      referenceOhms: { r1: 1000 },
       resistorRatedPowerW: 0.25,
     },
     parts: [
-      { id: 'power', label: '12 V 电源', count: '×1' },
-      { id: 'isource', label: '6 mA 电流源', count: '×1' },
-      { id: 'nodeA', label: '节点 A', count: '×1' },
-      { id: 'resistor', label: '电阻', count: '∞' },
+      { id: 'power', label: '12 V 电源（图 b）', count: '×1' },
       { id: 'ground', label: 'GND', count: '×1' },
-      { id: 'probe', label: '探针', count: '×1' },
     ],
     goals: [
-      { id: 'node', label: '让节点 A 稳定在约 3.0 V', when: { all: [
-        { metricBetween: { key: 'nodeAV', min: 2.95, max: 3.05 } },
-      ] } },
-      { id: 'power', label: '判断电源、R1、R2 与电流源各自的吸收/释放', when: { all: [
-        { powerJudged: { id: 'power', expect: 'deliver' } },
+      // 题1-1(1)(2)：先判参考方向是否关联、再判 ui 表示什么功率。
+      // R1 电流从 + 端流入 → 关联，ui 表示吸收；电源电流从 + 端流出 → 非关联，ui 表示发出。
+      { id: 'convention', label: '判断 R1 的参考方向是否关联，以及 ui 表示什么功率', when: { all: [
+        { assocJudged: { id: 'r1', expect: 'in' } },
+        { uiMeaningJudged: { id: 'r1', expect: 'absorb' } },
         { powerJudged: { id: 'r1', expect: 'absorb' } },
-        { powerJudged: { id: 'r2', expect: 'absorb' } },
-        { powerJudged: { id: 'isource', expect: 'absorb' } },
       ] } },
     ],
   }),
   2: defineLevel({
-    id: 2, model: 'resistor-dc-v1', title: '源与受控源', chapter: '第一章 · 电路基础', chapterSubtitle: '输出由控制量决定',
-    story: '9 V 电源经 R1 送到节点 A，节点 A 再经 R2 到节点 B、经 R3 回 GND——这是一条两级分压链。另有一只压控电流源：它注入节点 A 的电流是 g·U_B，控制量取节点 B 对 GND 的电压，而 g 由你手上的滑块决定（默认 0.25 mS）。让节点 B 稳定在约 3.6 V，并让受控源输出约 1.8 mA。',
-    concept: '受控源不是独立的：它的输出 I = g·U_B 由节点 B 的电压决定，而节点 B 的电压又被这股注入电流抬高，两者互相牵制，要用两个节点的 KCL 联立。节点 B 没有别的支路进出，所以 (U_A − U_B)/R2 = U_B/R3；节点 A 处 (9 V − U_A)/R1 + g·U_B = (U_A − U_B)/R2。代入 R1 = R2 = R3 = 1 kΩ、g = 0.5 mS：U_A = 2U_B，9 = (3 − 1000g)U_B → U_B = 3.6 V、U_A = 7.2 V、受控源输出 1.8 mA。',
+    id: 2,
+    model: 'resistor-dc-v1',
+    title: '题1-2 · 同一对 u、i 下的两个网络',
+    chapter: '第一章 · 电路模型和电路定律',
+    chapterSubtitle: '同一个电压电流，两个网络',
+    story: '题1-2：N_A 与 N_B 是两个二端网络，用上下两根线连起来。电压 u 标在上线 +、下线 −；电流 i 画在上线上。图(a) i 的箭头朝右，图(b) 朝左。对每个网络分别判断：电流 i 是从它标 + 的端子流入还是流出？ui 表示吸收还是发出？',
+    concept: '同一个端口电压 u、同一根线上的电流 i，对在线两端的两个网络含义相反：电流流入哪一端网络，哪一端就是关联（ui 表吸收），另一端电流从 + 端流出，就是非关联（ui 表发出）。',
+    intro: '两个二端网络用上下两根导线连成一个回路，共用同一个端口电压 u（上线 +、下线 −）和同一条线上的电流 i。对在线路两端的两个网络来说，同一个电压、电流的参考方向含义正好相反。',
     knowledge: [
-      { title: '受控源', formula: 'I = g · U控制\ng 单位：S（西门子）',
-        text: '压控电流源的输出电流由控制电压决定，不是固定值。控制电压为 0，它的输出就是 0——受控源不能像独立电源那样单独给电路供电。本关控制量取节点 B 的电压。' },
-      { title: '两级分压与联立', formula: '(U_A − U_B)/R2 = U_B/R3\n(9 − U_A)/R1 + g·U_B = (U_A − U_B)/R2',
-        text: '节点 B 是一条支路的中间点，先由它写出 U_A 与 U_B 的关系（U_A = 2U_B，当 R2 = R3），再代进节点 A 的 KCL，把两个未知量化成一个方程。' },
-      { title: '跨导 g 的量纲', formula: 'I = g · U\n[S] = [A]/[V] = 1/Ω',
-        text: 'g 的单位是西门子：0.5 mS 就是 0.5 mA/V。g 越大，同一个控制电压产生的注入电流越大；控制电压为 0 时无论 g 多大都没有输出。' },
+      { title: '串联线上的电流方向', formula: 'i 流入 N_A 端 ⇔ i 流出 N_B 端',
+        text: '在同一根串联导线上，电流从一个网络的 + 端流入，必从另一个网络的 + 端流出。因此两个网络的关联状态必然相反：一个关联，另一个必为非关联。' },
+      { title: '分别判断关联与功率', formula: '电流从 + 端流入 → 关联 → ui 表吸收\n电流从 + 端流出 → 非关联 → ui 表发出',
+        text: '对每个网络单独看：u 的 + 都在上线。i 的箭头指进哪个网络，哪个网络就是电流从 + 端流入，取关联参考方向，ui 表示吸收功率；另一个网络则为非关联，ui 表示发出功率。' },
     ],
+    intro: '在电路分析中，当涉及某个元件或部分电路的电流或电压时，必须指定电流或电压的参考方向（有时也称为正方向），才能开始进行分析和计算。在电路中，电流的实际流动方向或电压的实际方向可能是未知的，也可能是随时间变动的。',
     initialReversed: false,
-    board: { fixedParts: ['power', 'vccs', 'nodeA', 'nodeB', 'ground'], positions: {
-      power: { x: 175, y: 187 }, r1: { x: 345, y: 187 }, nodeA: { x: 493, y: 255 },
-      r2: { x: 620, y: 255 }, nodeB: { x: 790, y: 255 }, r3: { x: 620, y: 459 },
-      vccs: { x: 175, y: 527 }, ground: { x: 790, y: 527 },
-    } },
+    ui: { judgeOnly: true, abstract: true },
+    // 题1-2：两幅图，每幅两个盒子。truth：i 箭头朝右时 N_A 流出(非关联)、N_B 流入(关联)；朝左相反。
+    judgeLabels: { na: 'N_A', nb: 'N_B' },
+    // 向右时：N_A 非关联(out)、N_B 关联(in)；向左时整体取反。
+    judgedAssociation: { na: false, nb: true },
+    abstract: {
+      randomDirection: true,
+      boxes: [
+        { id: 'na', label: 'N_A', x: 300, y: 350 },
+        { id: 'nb', label: 'N_B', x: 600, y: 350 },
+      ],
+    },
+    board: {
+      fixedParts: ['power', 'r1', 'ground'],
+      positions: { power: {x:175,y:300}, r1: {x:420,y:300}, ground: {x:665,y:300} },
+    },
     circuit: {
-      source: 'power', ground: 'ground', nodeA: 'nodeA', nodeB: 'nodeB',
-      controlledSource: { id: 'vccs', out: 'vccs.out', in: 'vccs.in', control: { positive: 'nodeB', negative: 'ground' } },
-      defaultProbeTarget: 'nodeB',
-      flowLabel: '9 V 电源 → R1 → 节点 A → R2 → 节点 B → R3 → GND，受控源按 g·U_B 注入节点 A',
-      // Player-facing library shows one generic resistor; each drop takes the next slot.
-      resistors: ['r1', 'r2', 'r3'], resistorSlots: [], baseWires: [],
-      solutionWires: ['power-r1.a', 'r1.b-nodeA', 'nodeA-r2.a', 'r2.b-nodeB', 'nodeB-r3.a', 'r3.b-ground', 'vccs.out-nodeA', 'vccs.in-ground'],
+      source: 'power',
+      ground: 'ground',
+      nodeA: 'r1.a',
+      flowLabel: '题1-2',
+      resistors: ['r1'],
+      resistorSlots: [],
+      solutionWires: ['power-r1.a', 'r1.b-ground'],
+      initialWires: ['power-r1.a', 'r1.b-ground'],
     },
     electrical: {
-      sourceV: 9, controlledTransconductanceMs: 0.5, defaultTransconductanceMs: 0.25,
-      gainRangeMs: [0.05, 1, 0.05], scopeMaxV: 10,
-      resistorOptionsOhms: [470, 1000, 1500, 2000, 2200, 3300, 4700],
-      // Unequal defaults: the values must be equalised as well as g turned to 0.5 mS.
-      defaultOhms: { r1: 1500, r2: 1000, r3: 1500 },
-      referenceOhms: { r1: 1000, r2: 1000, r3: 1000 },
+      sourceV: 12,
+      scopeMaxV: 15,
+      resistorOptionsOhms: [1000],
+      defaultOhms: { r1: 1000 },
+      referenceOhms: { r1: 1000 },
       resistorRatedPowerW: 0.25,
     },
     parts: [
-      { id: 'power', label: '9 V 电源', count: '×1' },
-      { id: 'vccs', label: '压控电流源', count: '×1' },
-      { id: 'nodeA', label: '节点 A', count: '×1' },
-      { id: 'nodeB', label: '节点 B', count: '×1' },
-      { id: 'resistor', label: '电阻', count: '∞' },
+      { id: 'power', label: '12 V 电源', count: '×1' },
       { id: 'ground', label: 'GND', count: '×1' },
-      { id: 'probe', label: '探针', count: '×1' },
     ],
     goals: [
-      { id: 'node', label: '让节点 B 稳定在约 3.6 V', when: { all: [
-        { metricBetween: { key: 'nodeBV', min: 3.55, max: 3.65 } },
-      ] } },
-      { id: 'controlled', label: '让受控源输出约 1.8 mA（g = 0.5 mS × U_B）', when: { all: [
-        { metricBetween: { key: 'controlledSourceCurrentMa', min: 1.75, max: 1.85 } },
+      { id: 'convention', label: '判断 N_A、N_B 是否关联、ui 表示什么功率（电流方向每次随机）', when: { all: [
+        { assocJudged: { id: 'na', expect: 'out' } },
+        { uiMeaningJudged: { id: 'na', expect: 'deliver' } },
+        { assocJudged: { id: 'nb', expect: 'in' } },
+        { uiMeaningJudged: { id: 'nb', expect: 'absorb' } },
       ] } },
     ],
   }),
   3: defineLevel({
-    id: 3, model: 'resistor-dc-v1', title: '功率预算与供电设计', chapter: '第一章 · 电路基础', chapterSubtitle: '额定值决定器件怎么选',
-    story: '12 V 电源要给一只固定的 100 Ω 负载供电，要求负载电压约 3.0 V、负载功率约 90 mW。串联部分由你搭：拖入电阻、接线、选阻值。每只电阻都能选额定功率档位——默认 ¼ W，也可以换成 ½ W。读数要对，器件也不能超过它自己的额定值。',
-    concept: '串联部分要吃掉 12 V − 3.0 V = 9.0 V、通过 30 mA，所以等效阻值必须是 300 Ω。同一只 300 Ω 有两种活法：让它独自扛 30 mA，P = I²R = 0.27 W，¼ W 的器件就超限（换成 ½ W 才安全）；或者拆成两只 600 Ω 并联，电流各半，每只只有 0.135 W，¼ W 也够用。选型要同时看功能指标、器件应力、件数与成本。',
+    id: 3,
+    model: 'resistor-dc-v1',
+    title: '题1-3 · KCL/KVL 与功率平衡',
+    chapter: '第一章 · 电路模型和电路定律',
+    chapterSubtitle: '用 KCL/KVL 求各元件功率',
+    story: '题1-3 图(a)：N_A 与 N_B 用上下两线连接，中间支路接电流源 I_S。已知 I1=500mA，I_S=100mA，U=30V。先用 KCL、KVL 判断每个元件的电压电流方向，再求它们各自吸收的功率。',
+    concept: '在节点上用 KCL 求未知支路电流，沿回路用 KVL 求未知元件电压；确定每个元件电压、电流的实际方向后，再按关联/非关联判断功率是吸收还是发出。',
+    intro: '对含有多个元件的电路，先在节点上用 KCL 求出各支路电流，再沿回路用 KVL 求出各元件电压；电压电流方向都确定后，才能按关联参考方向计算每个元件吸收或发出的功率。',
     knowledge: [
-      { title: '功率与额定值', formula: 'P = I²R = U²/R\nP ≤ P额定（每只器件）',
-        text: '每只电阻都有自己的额定功率。先算实际耗散，再和它自己的额定值比较，还要留裕量——读数达标不等于方案可用。' },
-      { title: '两条降应力的路', formula: '换大额定值：¼ W → ½ W\n或并联分流：每只 P = I²R等效/n',
-        text: '超限时有两条路：换一只额定功率更大的器件，或者把这条支路拆成 n 只等值电阻并联——等效阻值不变，每只只承担 1/n 的电流，功率降到 1/n。' },
-      { title: '方案取舍', formula: '功能达标 ∧ 每只 P ≤ P额定',
-        text: '同一功能常有多种合格做法：一只 ½ W 的 300 Ω、两只 ¼ W 的 600 Ω 并联都能满足要求，接下来比较件数、成本和裕量。' },
+      { title: '节点电流定律 KCL', formula: 'Σ 流入 = Σ 流出',
+        text: '对任一节点，流入电流之和等于流出电流之和。本题在上端中间节点：I1 = I右 + I_S，故流进 N_B 的电流 = I1 − I_S = 400 mA。' },
+      { title: '功率平衡', formula: 'Σ 吸收 = Σ 发出',
+        text: '整个电路发出的功率等于吸收的功率。本题 N_A 发出 15 W，N_B 吸收 12 W、电流源吸收 3 W，二者相等，可用来校验。' },
     ],
     initialReversed: false,
-    board: { fixedParts: ['power', 'nodeA', 'ground', 'r2'], positions: {
-      power: { x: 175, y: 187 }, nodeA: { x: 620, y: 391 }, r2: { x: 790, y: 391 }, ground: { x: 790, y: 593 },
-      r1: { x: 310, y: 187 }, r3: { x: 310, y: 289 }, r4: { x: 310, y: 391 },
-    } },
+    ui: { judgeOnly: true, abstract: true },
+    judgeLabels: { na: 'N_A', nb: 'N_B', cs: '电流源' },
+    // 固定方向（本题数值给定）。N_A 电流从 + 端流出(非关联)；N_B、电流源电流从 + 端流入(关联)。
+    judgedAssociation: { na: false, nb: true, cs: true },
+    judgementSigns: { na: { u: 1, i: 1 }, nb: { u: 1, i: 1 }, cs: { u: 1, i: 1 } },
+    abstract: {
+      figure: 'kcl',
+      boxes: [
+        { id: 'na', label: 'N_A', x: 250, y: 350 },
+        { id: 'nb', label: 'N_B', x: 650, y: 350 },
+      ],
+    },
+    board: {
+      fixedParts: ['power', 'r1', 'ground'],
+      positions: { power: {x:175,y:350}, r1: {x:455,y:350}, ground: {x:700,y:350} },
+    },
     circuit: {
-      source: 'power', ground: 'ground', nodeA: 'nodeA',
-      // The load is given and fixed; 'load' only names it for the parameter menu.
-      load: 'r2',
-      defaultProbeTarget: 'nodeA',
-      flowLabel: '12 V 电源 →（你搭的串联部分）→ 节点 A → 负载 → GND',
-      // Player-facing library shows one generic resistor; each drop takes the next slot.
-      resistors: ['r1', 'r2', 'r3'], resistorSlots: [], baseWires: [],
-      solutionWires: ['power-r1.a', 'r1.b-nodeA', 'power-r3.a', 'r3.b-nodeA', 'nodeA-r2.a', 'r2.b-ground'],
+      source: 'power', ground: 'ground', nodeA: 'r1.a', flowLabel: '题1-3',
+      resistors: ['r1'], resistorSlots: [],
+      solutionWires: ['power-r1.a', 'r1.b-ground'],
+      initialWires: ['power-r1.a', 'r1.b-ground'],
     },
     electrical: {
-      sourceV: 12, loadOhms: 100, scopeMaxV: 14,
-      resistorOptionsOhms: [300, 600, 900, 1000, 1500, 2200],
-      // The defaults must not hand over the answer: 300 Ω is exactly the equivalent
-      // resistance the level is about, so a dropped resistor starts at 1 kΩ.
-      defaultOhms: { r1: 1000, r2: 100, r3: 1000 },
-      referenceOhms: { r1: 600, r2: 100, r3: 600 },
-      // Every resistor can be a ¼ W or a ½ W part: that choice is the level.
-      resistorRatedPowerW: 0.25,
-      resistorRatingOptionsW: [0.25, 0.5],
+      sourceV: 12, scopeMaxV: 15, resistorOptionsOhms: [1000],
+      defaultOhms: { r1: 1000 }, referenceOhms: { r1: 1000 }, resistorRatedPowerW: 0.25,
     },
-    parts: [
-      { id: 'power', label: '12 V 电源', count: '×1' },
-      { id: 'nodeA', label: '节点 A', count: '×1' },
-      { id: 'resistor', label: '电阻', count: '∞' },
-      { id: 'ground', label: 'GND', count: '×1' },
-      { id: 'probe', label: '探针', count: '×1' },
-    ],
+    parts: [ { id: 'power', label: '电源', count: '×1' }, { id: 'ground', label: 'GND', count: '×1' } ],
     goals: [
-      { id: 'node', label: '让节点 A（负载电压）稳定在约 3.0 V', when: { all: [
-        { metricBetween: { key: 'nodeAV', min: 2.95, max: 3.05 } },
-      ] } },
-      { id: 'load', label: '让负载功率达到约 90 mW', when: { all: [
-        { metricBetween: { key: 'r2PowerMw', min: 87, max: 93 } },
+      { id: 'power', label: '填入各元件吸收的功率（W），负号表示发出', when: { all: [
+        { powerValueJudged: { id: 'na', expect: -15 } },
+        { powerValueJudged: { id: 'nb', expect: 12 } },
+        { powerValueJudged: { id: 'cs', expect: 3 } },
       ] } },
     ],
   }),

@@ -4,7 +4,7 @@ import { boardToolIds, componentCatalog, componentSpec } from '../componentCatal
 
 const knownParts = new Set(Object.keys(componentCatalog));
 const knownTools = new Set(boardToolIds);
-const conditionTypes = new Set(['all', 'any', 'placed', 'wire', 'orientation', 'allowedWires', 'currentUnder', 'currentBetween', 'resistorPowerUnder', 'resistorSelected', 'resistorValuesSelected', 'metricBetween', 'networkSafe', 'branchCurrentsWithin', 'probeAt', 'pathKind', 'powerJudged', 'goal']);
+const conditionTypes = new Set(['all', 'any', 'placed', 'wire', 'orientation', 'allowedWires', 'currentUnder', 'currentBetween', 'resistorPowerUnder', 'resistorSelected', 'resistorValuesSelected', 'metricBetween', 'networkSafe', 'branchCurrentsWithin', 'probeAt', 'pathKind', 'powerJudged', 'assocJudged', 'uiMeaningJudged', 'powerValueJudged', 'goal']);
 
 const assert = (valid, message) => { if (!valid) throw new Error('Invalid level: ' + message); };
 const endpointPart = endpoint => endpoint.split('.')[0];
@@ -47,6 +47,14 @@ function validateCondition(condition, goalIds, partIds) {
   } else if (type === 'powerJudged') {
     assert(value && typeof value.id === 'string' && partIds.has(value.id), 'invalid power judgement element');
     assert(value.expect === 'absorb' || value.expect === 'deliver', 'invalid power judgement');
+  } else if (type === 'assocJudged') {
+    assert(value && typeof value.id === 'string' && partIds.has(value.id), 'invalid association judgement element');
+    assert(value.expect === 'in' || value.expect === 'out', 'invalid association judgement');
+  } else if (type === 'uiMeaningJudged') {
+    assert(value && typeof value.id === 'string' && partIds.has(value.id), 'invalid ui-meaning judgement element');
+    assert(value.expect === 'absorb' || value.expect === 'deliver', 'invalid ui-meaning judgement');
+  } else if (type === 'powerValueJudged') {
+    assert(value && typeof value.id === 'string' && typeof value.expect === 'number', 'invalid power-value judgement');
   } else {
     assert(value === true, type + ' must be true');
   }
@@ -61,7 +69,10 @@ export function defineLevel(level) {
   assert(new Set(level.parts.map(part => part.id)).size === level.parts.length, 'duplicate part id');
   const partIds = new Set(level.parts.filter(part => knownParts.has(part.id) || componentSpec(part.id)).map(part => part.id));
   assert(level.parts.every(part => knownParts.has(part.id) || componentSpec(part.id) || knownTools.has(part.id)), 'unsupported part');
-  assert(level.parts.some(part => part.id === 'probe'), 'probe tool is required');
+  // The probe is a measuring tool a level may omit (e.g. a sign-convention level
+  // where judgement is the only task); only require it when a goal asks to probe.
+  const usesProbe = JSON.stringify(level.goals || []).includes('probeAt');
+  assert(!usesProbe || level.parts.some(part => part.id === 'probe'), 'probe tool is required when a goal asks to probe');
   // A level may also fix a resistor it declares itself — for example the load a
   // supply has to drive, which must stay on the board and keep its value.
   const declaredResistorIds = new Set([...(level.circuit?.resistorSlots || []), ...(level.circuit?.resistors || [])]);
@@ -81,7 +92,7 @@ export function defineLevel(level) {
     // When there are no pre-declared slots, circuit.resistors is only the solved reference
     // used by tests; those ids are never library parts and never pre-placed for the player.
     const referenceOnly = !genericSlots;
-    assert(level.circuit?.resistors?.length >= 2 && level.circuit.resistors.every(id => referenceOnly || hasGenericResistor || partIds.has(id)), 'resistor parts are required');
+    assert(level.circuit?.resistors?.length >= 1 && level.circuit.resistors.every(id => referenceOnly || hasGenericResistor || partIds.has(id)), 'resistor parts are required');
     assert(level.circuit.resistors.every(id => Number.isFinite(electrical.referenceOhms?.[id]) && electrical.referenceOhms[id] > 0), 'reference resistor values are required');
     // A fixed part (the load a supply must drive) needs no player-facing choice:
     // its value is part of the problem statement.
@@ -112,10 +123,10 @@ export function defineLevel(level) {
       assert(endpointPart(controlledSource.in) === controlledSource.id && validEndpoint(controlledSource.in), 'invalid controlled source return terminal');
       assert(controlledSource.control && validEndpoint(controlledSource.control.positive) && validEndpoint(controlledSource.control.negative), 'controlled source needs two control terminals');
     }
-    assert(partIds.has(endpointPart(level.circuit.nodeA)) && validEndpoint(level.circuit.nodeA), 'node A endpoint is required');
+    const slotIds = new Set([...(level.circuit.resistorSlots || []), ...(level.circuit.resistors || [])]);
+    assert((partIds.has(endpointPart(level.circuit.nodeA)) || slotIds.has(endpointPart(level.circuit.nodeA))) && validEndpoint(level.circuit.nodeA), 'node A endpoint is required');
     const libraryOnlyIds = partIds.has('resistor') ? ['resistor'] : [];
     assert(level.board?.positions && [...partIds].filter(id => !libraryOnlyIds.includes(id)).every(id => Number.isFinite(level.board.positions[id]?.x) && Number.isFinite(level.board.positions[id]?.y)), 'every part needs a board position');
-    const slotIds = new Set([...(level.circuit.resistorSlots || []), ...(level.circuit.resistors || [])]);
     const wireEndOk = pin => (partIds.has(endpointPart(pin)) || slotIds.has(endpointPart(pin))) && validEndpoint(pin);
     assert(Array.isArray(level.circuit.solutionWires) && level.circuit.solutionWires.length > 0, 'solution wires are required');
     for (const wire of level.circuit.solutionWires) {
@@ -130,7 +141,8 @@ export function defineLevel(level) {
     assert(Array.isArray(level.goals) && level.goals.length > 0, 'goals are required');
     const goalIds = new Set(level.goals.map(goal => goal.id));
     assert(goalIds.size === level.goals.length, 'duplicate goal id');
-    level.goals.forEach(goal => validateCondition(goal.when, goalIds, new Set([...partIds, ...slotIds])));
+    const abstractIds = new Set(Object.keys(level.judgeLabels || level.judgedAssociation || {}));
+    level.goals.forEach(goal => validateCondition(goal.when, goalIds, new Set([...partIds, ...slotIds, ...abstractIds])));
     return Object.freeze(level);
   }
   assert(electrical && ['gpioHighV', 'ledForwardV', 'warningCurrentMa'].every(key => Number.isFinite(electrical[key]) && electrical[key] > 0), 'electrical parameters must be positive numbers');

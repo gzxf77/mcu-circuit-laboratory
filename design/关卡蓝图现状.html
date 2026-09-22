@@ -1,0 +1,107 @@
+<html style="margin:0;padding:0;">
+<title>电路游戏 · 关卡蓝图现状</title>
+<div style="width:100%;box-sizing:border-box;background:#0d1b1a;color:#d7e6e3;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;padding:20px 24px;line-height:1.45;">
+  <div style="max-width:980px;margin:0 auto;">
+    <div style="display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px;border-bottom:2px solid #2f9e8f;padding-bottom:10px;">
+      <div style="font-size:20px;font-weight:700;color:#eef7f5;">关卡蓝图现状 <span style="font-size:13px;font-weight:400;color:#8fb3ac;">· mcu-circuit-laboratory</span></div>
+      <div style="font-size:13px;color:#8fb3ac;">2026-09-21 · 主线：邱关源《电路》第 6 版，前 100 关覆盖 18 章</div>
+    </div>
+
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin:12px 0;">
+      <span style="font-size:13px;padding:4px 10px;border-radius:12px;background:#1c3a36;border:1px solid #2f9e8f;color:#9fe0d4;">● 已实现并可玩：第 1 章 · 1–3 关</span>
+      <span style="font-size:13px;padding:4px 10px;border-radius:12px;background:#33291a;border:1px solid #8a6a2f;color:#e8b45a;">● 待设计：第 2 章起（编号待重排）</span>
+      <span style="font-size:13px;padding:4px 10px;border-radius:12px;background:#222;border:1px solid #4a5a57;color:#a9c0bb;">模型里程碑：按关卡段分批扩展</span>
+    </div>
+
+    <div style="font-size:15px;font-weight:600;margin:16px 0 8px;color:#eef7f5;">一、300 关长期主线（13 模块）</div>
+    <div style="border:1px solid #2a3a37;border-radius:8px;overflow:hidden;">
+      <div style="display:grid;grid-template-columns:150px 90px 190px 1fr;gap:0;background:#142826;font-size:13px;font-weight:600;color:#9fe0d4;padding:8px 12px;border-bottom:1px solid #2a3a37;">
+        <div>模块</div><div>关卡</div><div>对齐课程</div><div>实现状态</div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:150px 90px 190px 1fr;gap:0;font-size:14px;padding:8px 12px;border-bottom:1px solid #1e302d;background:#101f1d;">
+        <div>1 · 电路模型与直流电路</div><div>1–34</div><div>《电路》第 1–5 章</div>
+        <div style="min-width:0;">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span style="background:#2f9e8f;color:#06201c;font-weight:700;padding:1px 8px;border-radius:4px;">1–3 已实现</span>
+            <span style="background:#33291a;color:#e8b45a;padding:1px 8px;border-radius:4px;">4–34 待设计</span>
+          </div>
+          <div style="height:6px;background:#1c3a36;border-radius:3px;margin-top:6px;max-width:360px;"><div style="width:8.8%;height:6px;background:#2f9e8f;border-radius:3px;"></div></div>
+          <div style="font-size:12px;color:#8fb3ac;margin-top:4px;">第 1 章压缩为 3 关（用户 2025 决定）已完成；第 2 章 8 关为下一批，编号按新密度重排</div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:150px 90px 190px 1fr;gap:0;font-size:14px;padding:8px 12px;border-bottom:1px solid #1e302d;">
+        <div>2 · 动态电路时域分析</div><div>35–50</div><div>《电路》第 6–7 章</div>
+        <div><span style="background:#33291a;color:#e8b45a;padding:1px 8px;border-radius:4px;">待设计</span><div style="font-size:12px;color:#8fb3ac;margin-top:4px;">进入前需实现电容/电感元件族 + 一阶/二阶暂态求解与波形</div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:150px 90px 190px 1fr;gap:0;font-size:14px;padding:8px 12px;border-bottom:1px solid #1e302d;">
+        <div>3 · 正弦稳态与频率响应</div><div>51–75</div><div>《电路》第 8–11 章</div>
+        <div><span style="background:#33291a;color:#e8b45a;padding:1px 8px;border-radius:4px;">待设计</span><div style="font-size:12px;color:#8fb3ac;margin-top:4px;">进入前需实现正弦电源、相量/正弦稳态求解、频响曲线</div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:150px 90px 190px 1fr;gap:0;font-size:14px;padding:8px 12px;border-bottom:1px solid #1e302d;">
+        <div>4 · 三相、非正弦与复频域</div><div>76–90</div><div>《电路》第 12–14 章</div>
+        <div><span style="background:#33291a;color:#e8b45a;padding:1px 8px;border-radius:4px;">待设计</span><div style="font-size:12px;color:#8fb3ac;margin-top:4px;">三相电源、非正弦信号源、复频域后端</div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:150px 90px 190px 1fr;gap:0;font-size:14px;padding:8px 12px;border-bottom:1px solid #1e302d;">
+        <div>5 · 电路进阶专题</div><div>91–100</div><div>《电路》第 15–18 章</div>
+        <div><span style="background:#33291a;color:#e8b45a;padding:1px 8px;border-radius:4px;">待设计</span><div style="font-size:12px;color:#8fb3ac;margin-top:4px;">矩阵/图、二端口、非线性、传输线（入门深度）</div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:150px 90px 190px 1fr;gap:0;font-size:14px;padding:8px 12px;border-bottom:1px solid #1e302d;">
+        <div>6 · 半导体与整流</div><div>101–125</div><div>模电</div>
+        <div><span style="background:#33291a;color:#e8b45a;padding:1px 8px;border-radius:4px;">待设计</span><div style="font-size:12px;color:#8fb3ac;margin-top:4px;">二极管、整流、滤波、稳压、器件额定值</div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:150px 90px 190px 1fr;gap:0;font-size:14px;padding:8px 12px;border-bottom:1px solid #1e302d;">
+        <div>7 · 放大与模拟接口</div><div>126–150</div><div>模电</div>
+        <div><span style="background:#33291a;color:#e8b45a;padding:1px 8px;border-radius:4px;">待设计</span><div style="font-size:12px;color:#8fb3ac;margin-top:4px;">晶体管/MOSFET、运放、传感信号调理</div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:150px 90px 190px 1fr;gap:0;font-size:14px;padding:8px 12px;border-bottom:1px solid #1e302d;">
+        <div>8 · 组合逻辑</div><div>151–175</div><div>数电</div>
+        <div><span style="background:#33291a;color:#e8b45a;padding:1px 8px;border-radius:4px;">待设计</span><div style="font-size:12px;color:#8fb3ac;margin-top:4px;">电平、真值表、门电路、编码译码</div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:150px 90px 190px 1fr;gap:0;font-size:14px;padding:8px 12px;border-bottom:1px solid #1e302d;">
+        <div>9 · 时序逻辑</div><div>176–200</div><div>数电</div>
+        <div><span style="background:#33291a;color:#e8b45a;padding:1px 8px;border-radius:4px;">待设计</span><div style="font-size:12px;color:#8fb3ac;margin-top:4px;">触发器、计数器、时序图、硬件按键抖动</div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:150px 90px 190px 1fr;gap:0;font-size:14px;padding:8px 12px;border-bottom:1px solid #1e302d;">
+        <div>10 · 微机最小系统与 GPIO</div><div>201–225</div><div>微机</div>
+        <div><span style="background:#33291a;color:#e8b45a;padding:1px 8px;border-radius:4px;">待设计</span><div style="font-size:12px;color:#8fb3ac;margin-top:4px;">供电/复位/时钟/GPIO；LED 点灯模型可在此复用</div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:150px 90px 190px 1fr;gap:0;font-size:14px;padding:8px 12px;border-bottom:1px solid #1e302d;">
+        <div>11 · 定时、中断与 PWM</div><div>226–250</div><div>微机</div>
+        <div><span style="background:#33291a;color:#e8b45a;padding:1px 8px;border-radius:4px;">待设计</span><div style="font-size:12px;color:#8fb3ac;margin-top:4px;">定时器、中断、软件消抖、PWM</div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:150px 90px 190px 1fr;gap:0;font-size:14px;padding:8px 12px;border-bottom:1px solid #1e302d;">
+        <div>12 · 采样与模拟接口</div><div>251–275</div><div>微机</div>
+        <div><span style="background:#33291a;color:#e8b45a;padding:1px 8px;border-radius:4px;">待设计</span><div style="font-size:12px;color:#8fb3ac;margin-top:4px;">分压接 ADC、量化、滤波、传感器校准</div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:150px 90px 190px 1fr;gap:0;font-size:14px;padding:8px 12px;">
+        <div>13 · 通信外设、系统项目</div><div>276–300</div><div>微机 + 综合</div>
+        <div><span style="background:#33291a;color:#e8b45a;padding:1px 8px;border-radius:4px;">待设计</span><div style="font-size:12px;color:#8fb3ac;margin-top:4px;">UART/I²C/SPI、系统项目、容差与多工况验收</div></div>
+      </div>
+    </div>
+
+    <div style="font-size:15px;font-weight:600;margin:18px 0 8px;color:#eef7f5;">二、下一批：第 2 章 8 关（现编号 9–16，待按新密度重排）</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;">
+      <div style="background:#101f1d;border:1px solid #2a3a37;border-radius:8px;padding:8px 10px;font-size:13px;"><b style="color:#9fe0d4;">串并联等效</b><br><span style="color:#a9c0bb;">组合电阻实现目标等效电阻</span></div>
+      <div style="background:#101f1d;border:1px solid #2a3a37;border-radius:8px;padding:8px 10px;font-size:13px;"><b style="color:#9fe0d4;">负载效应</b><br><span style="color:#a9c0bb;">带载后电压下降，预测并修正</span></div>
+      <div style="background:#101f1d;border:1px solid #2a3a37;border-radius:8px;padding:8px 10px;font-size:13px;"><b style="color:#9fe0d4;">电源等效变换</b><br><span style="color:#a9c0bb;">电压源/电流源模型端特性一致</span></div>
+      <div style="background:#101f1d;border:1px solid #2a3a37;border-radius:8px;padding:8px 10px;font-size:13px;"><b style="color:#9fe0d4;">电源内阻</b><br><span style="color:#a9c0bb;">空载/带载电压求内阻，选可行负载</span></div>
+      <div style="background:#101f1d;border:1px solid #2a3a37;border-radius:8px;padding:8px 10px;font-size:13px;"><b style="color:#9fe0d4;">两路负载供电</b><br><span style="color:#a9c0bb;">分流与源端电流核对</span></div>
+      <div style="background:#101f1d;border:1px solid #2a3a37;border-radius:8px;padding:8px 10px;font-size:13px;"><b style="color:#9fe0d4;">等效网络比较</b><br><span style="color:#a9c0bb;">同输出指标，比总电流/功耗选优</span></div>
+      <div style="background:#101f1d;border:1px solid #2a3a37;border-radius:8px;padding:8px 10px;font-size:13px;"><b style="color:#9fe0d4;">Y-Δ 变换</b><br><span style="color:#a9c0bb;">桥式网络等效，识别 Y/Δ 结构</span></div>
+      <div style="background:#101f1d;border:1px solid #2a3a37;border-radius:8px;padding:8px 10px;font-size:13px;"><b style="color:#9fe0d4;">综合 · 输入电阻</b><br><span style="color:#a9c0bb;">端电压/端电流测一端口输入电阻</span></div>
+    </div>
+
+    <div style="font-size:15px;font-weight:600;margin:18px 0 8px;color:#eef7f5;">三、设计关卡时的硬约束</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;">
+      <div style="background:#101f1d;border:1px solid #2a3a37;border-radius:8px;padding:8px 10px;font-size:13px;color:#a9c0bb;"><b style="color:#e8b45a;">每关 ≤2 条目标</b>：只放电气读数或判断结论；仪器位置永远不是目标</div>
+      <div style="background:#101f1d;border:1px solid #2a3a37;border-radius:8px;padding:8px 10px;font-size:13px;color:#a9c0bb;"><b style="color:#e8b45a;">答题步骤不雷同</b>：主要动词（搭建/判断/整定/预测/测绘/取舍/归并）换关必换或加新操作</div>
+      <div style="background:#101f1d;border:1px solid #2a3a37;border-radius:8px;padding:8px 10px;font-size:13px;color:#a9c0bb;"><b style="color:#e8b45a;">数据驱动</b>：同类电路只加 catalog 配置；新元件族/模型注册一次、多关复用</div>
+      <div style="background:#101f1d;border:1px solid #2a3a37;border-radius:8px;padding:8px 10px;font-size:13px;color:#a9c0bb;"><b style="color:#e8b45a;">已否决题型</b>：不做多选题、不做故障注入找断线；不设星级/XP</div>
+      <div style="background:#101f1d;border:1px solid #2a3a37;border-radius:8px;padding:8px 10px;font-size:13px;color:#a9c0bb;"><b style="color:#e8b45a;">判题接受等效接法</b>：读数达标但器件过载仍被实时拦下；故障时勾选清单清零</div>
+      <div style="background:#101f1d;border:1px solid #2a3a37;border-radius:8px;padding:8px 10px;font-size:13px;color:#a9c0bb;"><b style="color:#e8b45a;">教材引用</b>：按「印刷页 + 24 = PDF 页」用 tools/pdfocr 本机 OCR；公式不直接抄 OCR 结果</div>
+    </div>
+  </div>
+</div>
+</html>

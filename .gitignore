@@ -26,5 +26,8 @@ web/.env.*
 电路 第6版 (邱关源).pdf
 web/repro.mjs
 
+# Locally built helpers (source stays in tools/, the binary does not)
+tools/pdfocr
+
 # Local DSH profile backup for the code-review plugin install
 .dsh-profile-backup/

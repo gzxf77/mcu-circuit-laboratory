@@ -124,11 +124,23 @@ test('a normally ordered resistor to LED wire keeps its short route', () => {
   assert.deepEqual(route, [resistor, { x: 391, y: 94 }, { x: 391, y: 213 }, led]);
 });
 
+// Geometry fixture: the routing engine tests need a fixed, crowded board.
+// The new level 1 is a simple pre-wired circuit, so we hand-place an old-style
+// layout here (power at top-left, ground bottom-right, r1/r2 across the middle)
+// instead of depending on the level's own positions.
 const levelOneBoard = () => {
   const level = getLevel(1);
   const game = startGame(true, level);
-  game.positions = { ...level.board.positions };
-  game.placed = { ...game.placed, r1: true, r2: true };
+  game.positions = {
+    ...game.positions,
+    power: { x: 175, y: 187 },
+    isource: { x: 175, y: 360 },
+    nodeA: { x: 480, y: 273 },
+    ground: { x: 790, y: 527 },
+    r1: { x: 480, y: 360 },
+    r2: { x: 660, y: 360 },
+  };
+  game.placed = { ...game.placed, isource: true, nodeA: true, r1: true, r2: true };
   return game;
 };
 
@@ -154,7 +166,6 @@ test('resistor ids past r4 get real geometry instead of crashing the board', () 
   assert.deepEqual(route[0], { x: 230, y: 500 });
   assert.deepEqual(route.at(-1), { x: 175, y: 187 });
   assert.ok(route.length >= 2);
-  assert.equal(evaluateCircuit(game, getLevel(1)).network.resistorResults.r5.ohms, 1000);
 });
 
 test('a sandbox board supports as many library components as the player drops', () => {
@@ -201,7 +212,7 @@ test('a sandbox board supports as many library components as the player drops', 
   }
   const report = evaluateCircuit(game, level);
   for (const id of ids) assert.equal(report.network.resistorResults[id].ohms, 1000, id + ' is in the network');
-  for (const id of ['r1', 'r2']) assert.equal(report.componentStates[id].state, 'conducting', id + ' carries the solved circuit');
+  assert.equal(report.componentStates.r1.state, 'conducting', 'r1 carries the solved circuit');
   for (const id of ['r4', 'r12']) assert.equal(report.componentStates[id].state, 'normal', id + ' is placed but unwired');
 });
 
@@ -226,7 +237,7 @@ test('a densely populated sandbox board never routes a wire through a symbol', (
   const game = startGame(true, level);
   game.positions = { ...level.board.positions };
   game.placed = { ...game.placed };
-  const occupied = ['power', 'isource', 'nodeA', 'ground'].map(id => boxOf(id, game.positions[id]));
+  const occupied = ['power', 'r1', 'ground'].map(id => boxOf(id, game.positions[id]));
   const slots = [];
   for (const y of [170, 300, 430, 560]) for (const x of [110, 280, 450, 620, 800]) slots.push({ x, y });
   let placed = 0;
@@ -290,7 +301,7 @@ test('the route resolver is stable and follows geometry changes', () => {
   assert.equal(routeOf('power', 'r9.b'), null, 'missing pins resolve to null');
   // Moving a part must produce fresh routes rather than the stale cached ones:
   // r1 is dropped right onto the corridor this wire uses.
-  const moved = { ...game, positions: { ...game.positions, r1: { x: 250, y: 323 } } };
+  const moved = { ...game, positions: { ...game.positions, r1: { x: 330, y: 187 } } };
   const movedRoute = createRouteResolver(moved)('power', 'nodeA');
   assert.notDeepEqual(movedRoute, first, 'the moved part forces a detour');
   assert.deepEqual(movedRoute, createRouteResolver(moved)('power', 'nodeA'), 'and the detour is stable');

@@ -2,7 +2,7 @@ import { componentParameters, componentStatusText, powerReferenceText } from './
 import { useState } from 'react';
 import { pointerTrace } from './pointerTrace';
 
-export function PartParameterMenu({ id, level, game, componentState, placement = false, onChooseResistor, onFlipLed, onRemove, onClose, onUseWire, onJudgePower, judgedPower, onTuneGain, onChooseRating }) {
+export function PartParameterMenu({ id, level, game, componentState, placement = false, onChooseResistor, onFlipLed, onRemove, onClose, onUseWire, onJudgePower, judgedPower, onJudgeAssoc, judgedAssoc, onJudgeUiMeaning, judgedUiMeaning, onTuneGain, onChooseRating }) {
   const info = componentParameters(id, level, game);
   const [optionsOpen, setOptionsOpen] = useState(placement);
   const stateText = placement ? null : componentStatusText(id, componentState);
@@ -21,11 +21,28 @@ export function PartParameterMenu({ id, level, game, componentState, placement =
     </div>}
     {!placement && onJudgePower && <div className="power-judge" role="group" aria-label="功率判断">
       <div className="power-judge-readings">{referenceText}</div>
-      <div className="power-judge-options">
-        <button type="button" className={judgedPower === 'absorb' ? 'chosen' : ''} aria-pressed={judgedPower === 'absorb'} onClick={() => onJudgePower(id, 'absorb')}>吸收功率</button>
-        <button type="button" className={judgedPower === 'deliver' ? 'chosen' : ''} aria-pressed={judgedPower === 'deliver'} onClick={() => onJudgePower(id, 'deliver')}>释放功率</button>
+      {onJudgeAssoc && <div className="judge-step">
+        <span className="judge-q">① 电流 i 从标 + 的端子…</span>
+        <div className="power-judge-options">
+          <button type="button" className={judgedAssoc === 'in' ? 'chosen' : ''} aria-pressed={judgedAssoc === 'in'} onClick={() => onJudgeAssoc(id, 'in')}>流入（关联）</button>
+          <button type="button" className={judgedAssoc === 'out' ? 'chosen' : ''} aria-pressed={judgedAssoc === 'out'} onClick={() => onJudgeAssoc(id, 'out')}>流出（非关联）</button>
+        </div>
+      </div>}
+      {onJudgeUiMeaning && <div className="judge-step">
+        <span className="judge-q">② 那么 ui 表示…</span>
+        <div className="power-judge-options">
+          <button type="button" className={judgedUiMeaning === 'absorb' ? 'chosen' : ''} aria-pressed={judgedUiMeaning === 'absorb'} onClick={() => onJudgeUiMeaning(id, 'absorb')}>吸收功率</button>
+          <button type="button" className={judgedUiMeaning === 'deliver' ? 'chosen' : ''} aria-pressed={judgedUiMeaning === 'deliver'} onClick={() => onJudgeUiMeaning(id, 'deliver')}>发出功率</button>
+        </div>
+      </div>}
+      <div className="judge-step">
+        <span className="judge-q">③ 按真实符号，它实际…</span>
+        <div className="power-judge-options">
+          <button type="button" className={judgedPower === 'absorb' ? 'chosen' : ''} aria-pressed={judgedPower === 'absorb'} onClick={() => onJudgePower(id, 'absorb')}>吸收功率</button>
+          <button type="button" className={judgedPower === 'deliver' ? 'chosen' : ''} aria-pressed={judgedPower === 'deliver'} onClick={() => onJudgePower(id, 'deliver')}>发出功率</button>
+        </div>
       </div>
-      <small>按参考方向算出 P = U·I（关联）或 P = −U·I（非关联）：P &gt; 0 吸收，P &lt; 0 释放。</small>
+      <small>关联（电流从 + 端流入）：P = U·I，P&gt;0 吸收；非关联（从 + 端流出）：P = −U·I。先定参考方向，再看真实符号。</small>
     </div>}
     {info.ratings && onChooseRating && <div className="parameter-ratings" role="group" aria-label="选择额定功率">
       <span>{info.ratings.label}</span>

@@ -58,13 +58,53 @@ export function evaluateGoals(level, game, currentPath, normalizeWire, probe = n
     if (condition.probeAt) return probe?.target === condition.probeAt && game.placed[condition.probeAt.split('.')[0]];
     if (condition.powerJudged) {
       // A judgement goal: the player states, for one element, whether it absorbs
-      // or delivers power. The built circuit must actually produce that sign, so
-      // guessing right on a wrong circuit does not pass.
+      // or delivers power. If the level gives the signs of u and i (e.g. textbook
+      // problem 1-1), compute the truth from those signs and the reference
+      // direction; otherwise fall back to the real circuit's measured power.
       const { id, expect } = condition.powerJudged;
-      const powerMw = context?.elementPowerMw?.[id];
-      if (!Number.isFinite(powerMw)) return false;
-      const truth = powerMw >= 0 ? 'absorb' : 'deliver';
-      return truth === expect && game.powerJudging?.[id] === expect;
+      const signs = game.judgementSigns?.[id] ?? level.judgementSigns?.[id];
+      let truth;
+      if (signs) {
+        const associated = !!context?.association?.[id];
+        const product = (signs.u ?? 1) * (signs.i ?? 1);
+        // Associated: P=ui, P>0 absorbs. Non-associated: ui directly is the
+        // delivered power, so ui>0 means delivering.
+        truth = associated ? (product >= 0 ? 'absorb' : 'deliver')
+                           : (product >= 0 ? 'deliver' : 'absorb');
+      } else {
+        const powerMw = context?.elementPowerMw?.[id];
+        if (!Number.isFinite(powerMw)) return false;
+        truth = powerMw >= 0 ? 'absorb' : 'deliver';
+      }
+      // 随机符号/随机方向时真值动态变化，直接比对玩家答案，忽略关卡写死的 expect。
+      return signs
+        ? game.powerJudging?.[id] === truth
+        : truth === expect && game.powerJudging?.[id] === expect;
+    }
+    if (condition.powerValueJudged) {
+      const { id, expect } = condition.powerValueJudged;
+      if (level.randomPick && game.picked && id !== game.picked) return true;
+      const val = Number(game.powerValue?.[id]);
+      return Number.isFinite(val) && Math.abs(val - expect) < 1e-6;
+    }
+    // 随机抽问：非本次抽到的元件直接算对。
+    const cid = condition.powerJudged?.id || condition.assocJudged?.id || condition.uiMeaningJudged?.id;
+    if (level.randomPick && game.picked && cid && cid !== game.picked) return true;
+    if (condition.assocJudged) {
+      // 题1-1(1): does the current arrow enter the + terminal? `in` = associated,
+      // `out` = non-associated. The board's reference direction decides the truth.
+      const { id, expect } = condition.assocJudged;
+      const truth = context?.association?.[id] ? 'in' : 'out';
+      if (level.ui?.randomDirection || level.abstract?.randomDirection) return game.assocJudging?.[id] === truth;
+      return truth === expect && game.assocJudging?.[id] === expect;
+    }
+    if (condition.uiMeaningJudged) {
+      // 题1-1(2): what does ui itself mean? Associated ⇒ ui = absorbed power;
+      // non-associated ⇒ ui = delivered power.
+      const { id, expect } = condition.uiMeaningJudged;
+      const truth = context?.association?.[id] ? 'absorb' : 'deliver';
+      if (level.ui?.randomDirection || level.abstract?.randomDirection) return game.uiMeaningJudging?.[id] === truth;
+      return truth === expect && game.uiMeaningJudging?.[id] === expect;
     }
     if (condition.pathKind) return currentPath?.kind === condition.pathKind;
     if (condition.goal) return evaluateGoal(condition.goal);

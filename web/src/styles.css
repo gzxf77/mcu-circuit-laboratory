@@ -180,6 +180,19 @@ button:disabled { opacity: .6; cursor: wait; }
 .resistor.overload rect { fill: #bc7e62; stroke: #f0a273; filter: drop-shadow(0 0 9px #d9775d99); }
 .resistor.overload .bands { stroke: #6b3d37; }
 .resistor .component-flow { fill: none; stroke: #f9f2ce; stroke-width: 2.8; stroke-dasharray: 6 12; pointer-events: none; filter: drop-shadow(0 0 3px #e2efb6); animation: resistor-flow .8s linear infinite; }
+.ref-tag { font: 600 15px/1 ui-monospace, monospace; fill: #8fd0ff; }
+.board-power > text.ref-tag { font: 600 15px/1 ui-monospace, monospace; }
+.board-power > text.ref-polarity { font: 700 18px/1 ui-monospace, monospace; }
+.board-power > text.ref-signs { font: 600 13px/1 ui-monospace, monospace; }
+.ref-polarity { font: 700 18px/1 ui-monospace, monospace; fill: #ffd27a; }
+.ref-i { font: italic 700 16px/1 ui-monospace, serif; fill: #ffd27a; }
+.ref-arrow { fill: none; stroke: #ffd27a; stroke-width: 2; pointer-events: none; }
+.ref-signs { font: 600 13px/1 ui-monospace, monospace; fill: #9ef2c4; }
+.board-judge-panel { position: absolute; left: 50%; transform: translateX(-50%); bottom: 8px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; align-items: end; z-index: 5; width: min(96%, 440px); }
+.judge-card { width: auto; background: rgba(10, 26, 34, 0.94); border: 1px solid #2c4a56; border-radius: 12px; padding: 10px 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.35); }
+.judge-card-title { font: 600 14px/1.2 ui-monospace, monospace; color: #ffd27a; margin-bottom: 8px; }
+.judge-step { margin-bottom: 8px; }
+.judge-q { display: block; font-size: 13px; color: #cfe3ec; margin-bottom: 5px; }
 .resistor.burst rect { animation: resistor-failure 1.05s ease-out both; }.resistor.burst .bands { stroke: #403b39; }
 .resistor-burst-effect { pointer-events: none; }.resistor-burst-effect path { fill: none; stroke: #ffb56d; stroke-width: 3; stroke-linecap: round; filter: drop-shadow(0 0 5px #ff9b53); }
 .resistor-burst-effect circle { fill: #84979b; opacity: 0; animation: smoke-rise 1.1s ease-out forwards; }.resistor-burst-effect circle:nth-of-type(2) { animation-delay: .14s; }.resistor-burst-effect circle:nth-of-type(3) { animation-delay: .26s; }
@@ -321,7 +334,7 @@ button:disabled { opacity: .6; cursor: wait; }
 }
 @media (max-width: 780px) {
   .topbar { grid-template-columns: 1fr minmax(130px,180px) 42px; padding: 0 12px; }.brand { gap: 8px; }.brand strong { font-size: 20px; }.brand small,.chapter,.progress { display: none; }.route { padding: 0 5px; }.settings { border: 0; }
-  .workspace { display: flex; flex-direction: column; padding: 8px; }.board-panel { order: 1; width: 100%; height: 670px; flex: 0 0 670px; }.left-stack { order: 2; width: 100%; height: auto; }.right-stack { order: 3; width: 100%; display: flex; }
+  .workspace { display: flex; flex-direction: column; padding: 8px; }.right-stack { order: 1; width: 100%; display: flex; }.board-panel { order: 2; width: 100%; height: 670px; flex: 0 0 670px; }.left-stack { order: 3; width: 100%; height: auto; }
   .board-footer { height: 68px; flex-basis: 68px; }.board-footer button:not(.run-button) { min-width: 68px; padding: 0 7px; font-size: 11.5px; gap: 5px; }.board-footer > div { gap: 7px; }.board-footer kbd { display: none; }.run-button { min-width: 150px; height: 48px; font-size: 17px; }
   .board-header { height: 89px; flex-basis: 89px; flex-wrap: wrap; align-content: center; padding: 7px 12px; }.board-header > div:first-child { width: 100%; }.board-controls { width: 100%; justify-content: flex-end; }
   .board-controls button { min-width: 84px; font-size: 11px; }.board-controls button:last-child { min-width: 70px; }.output-panel,.led-panel { flex-basis: auto; }.site-footer { gap: 10px; padding: 0 11px; font-size: 9px; }.site-footer span:last-child { display: none; }
@@ -329,3 +342,23 @@ button:disabled { opacity: .6; cursor: wait; }
   .failure-overlay { padding: 10px; }.failure-dialog { max-height: 94dvh; }.failure-heading { padding: 15px; }.failure-heading h2 { font-size: 21px; }.failure-symbol { width: 51px; height: 51px; flex-basis: 51px; }.failure-facts { padding: 0 14px; }.failure-facts p { font-size: 13px; }.model-note { margin: 10px 14px 0; }.failure-actions { padding: 14px; flex-direction: column; align-items: stretch; }.failure-actions > div { width: 100%; }.failure-actions button { flex: 1; }
   .success-overlay { padding: 10px; }.success-dialog { padding: 22px 17px 20px; }.success-emblem { width: 82px; height: 82px; }.success-metrics { gap: 5px; margin-top: 17px; }.success-metrics strong { font-size: 15px; }.success-note { margin-bottom: 14px; }
 }
+
+.abstract-wire { stroke: #c8d5d7; stroke-width: 4; fill: none; }
+.abstract-box { fill: #15363a; stroke: #5fa8a0; stroke-width: 2.5; }
+.abstract-box-label { font: 700 20px/1 ui-monospace, monospace; fill: #e8f4f1; }
+.abstract-i-arrow { stroke: #ffd27a; stroke-width: 2.5; fill: none; }
+
+.board-dir-switch { position: absolute; left: 50%; transform: translateX(-50%); bottom: 430px; white-space: nowrap; z-index: 6; display: flex; align-items: center; gap: 8px; background: rgba(11,40,50,.92); border: 1px solid #2c5a63; border-radius: 10px; padding: 6px 12px; }
+.board-dir-label { color: #9fc2c8; font-size: 13px; }
+.board-dir-switch button { background: #15363a; color: #cfe6e2; border: 1px solid #3a6b72; border-radius: 8px; padding: 4px 14px; cursor: pointer; font-size: 14px; }
+.board-dir-switch button.chosen { background: #ffd27a; color: #3a2c10; border-color: #ffd27a; font-weight: 700; }
+.abstract-conn { stroke: #9cebdc; }
+.abstract-term { fill: #c8d5d7; }
+.ref-polarity-big { font-size: 26px; font-weight: 700; }
+.ref-signs { font-size: 18px; font-weight: 600; fill: #9cebdc; }
+.knowledge-intro { margin: -14px 0 10px; font-size: 13px; line-height: 1.45; color: #c3d4d2; }
+.knowledge-panel > .knowledge-intro, .knowledge-panel > .knowledge-card { margin-left: 14px; margin-right: 14px; }
+.power-value-input { width: 120px; padding: 8px 10px; font-size: 15px; border-radius: 8px; border: 1px solid #3f7a83; background: #0e2a30; color: #cdeee8; }
+.kcl-signs { font-size: 20px; font-weight: 700; }
+.kcl-box-label { font-size: 26px; font-weight: 700; fill: #e8f4f1; }
+.kcl-values { font-size: 24px; font-weight: 700; fill: #cdeee8; letter-spacing: 2px; }

@@ -12,7 +12,7 @@ function Pin({ id, x, y, pending, hovered, onStart, onProbe, onKeyboardConnect }
     <circle className="pin-visible" cx={x} cy={y} r="8" />
   </g>;
 }
-export function CircuitBoard({ level, game, componentStates, currentPath, flowEdges, failureEffect, probe, probeReading, pending, selected, zoom, onConnect, onProbeChange, onSelect, onMove, onMoveEnd, onDropPart, onRemoveSelected, onFlipLed, onChooseResistor, onJudgePower, onTuneGain, onChooseRating }) {
+export function CircuitBoard({ level, game, componentStates, currentPath, flowEdges, failureEffect, probe, probeReading, pending, selected, zoom, onConnect, onProbeChange, onSelect, onMove, onMoveEnd, onDropPart, onRemoveSelected, onFlipLed, onChooseResistor, onJudgePower, onJudgeAssoc, onJudgeUiMeaning, onTuneGain, onChooseRating, judgeDir, onJudgeDir }) {
   const svg = useRef(null);
   const menuRef = useRef(null);
   const drag = useRef(null);
@@ -54,12 +54,16 @@ export function CircuitBoard({ level, game, componentStates, currentPath, flowEd
     const ids = new Set();
     const visit = condition => {
       if (!condition || typeof condition !== 'object') return;
-      if (condition.powerJudged) ids.add(condition.powerJudged.id);
+      for (const kind of ['powerJudged', 'assocJudged', 'uiMeaningJudged']) {
+        if (condition[kind]) ids.add(condition[kind].id);
+      }
       for (const key of ['all', 'any']) (condition[key] || []).forEach(visit);
     };
     level.goals.forEach(goal => visit(goal.when));
     return ids;
   })();
+  const judgeOnly = !!level.ui?.judgeOnly;
+  const abstract = !!level.ui?.abstract;
   const routeOf = createRouteResolver(game);
   // The few crossings the single-layer router cannot remove are drawn as hops so
   // they can never be mistaken for a junction. Keys are normalised, so the two
@@ -231,11 +235,17 @@ export function CircuitBoard({ level, game, componentStates, currentPath, flowEd
     const bottom = (menuAnchor.bottom - viewY) / viewHeight * size.height;
     const below = bottom + 8;
     const above = top - menuHeight - 8;
-    const menuTop = below + menuHeight <= size.height - 6 ? below
-      : above >= 6 ? above
-        : Math.max(6, Math.min(size.height - menuHeight - 6, below));
+    // When the menu is too tall to sit either below or above the part without
+    // covering it, dock it to the right edge instead of sliding over the
+    // component the player is meant to be looking at.
+    const fitsBelow = below + menuHeight <= size.height - 6;
+    const fitsAbove = above >= 6;
+    const dockRight = !(fitsBelow || fitsAbove);
+    const menuTop = dockRight ? 8 : fitsBelow ? below : above;
+    const centeredLeft = Math.max(6, Math.min(size.width - width - 6, x - width / 2));
     return {
-      width, left: Math.max(6, Math.min(size.width - width - 6, x - width / 2)),
+      width,
+      left: dockRight ? size.width - width - 8 : centeredLeft,
       top: menuTop,
     };
   })();
@@ -244,7 +254,7 @@ export function CircuitBoard({ level, game, componentStates, currentPath, flowEd
     onPointerDown={event => { if (event.target === event.currentTarget) { pointerTrace('background-down', { x: event.clientX, y: event.clientY }); onSelect(null); } }}>
     <defs><pattern id="board-hole-grid" width={boardGrid.step} height={boardGrid.step} patternUnits="userSpaceOnUse"><circle cx={boardGrid.offset} cy={boardGrid.offset} r="2.2" fill="#517b84" opacity=".7" /></pattern></defs>
     <rect x={viewX} y={viewY} width={viewWidth} height={viewHeight} fill="url(#board-hole-grid)" pointerEvents="none" aria-hidden="true" />
-    <g className="board-wires">
+    {!abstract && <g className="board-wires">
       {game.wires.map(wire => {
         const [from, to] = wire.split('-');
         const key = wireKey(from, to);
@@ -261,13 +271,78 @@ export function CircuitBoard({ level, game, componentStates, currentPath, flowEd
         return <g key={key} className={'wire ' + color + (selected === 'wire:' + key ? ' selected' : '')} onClick={event => { event.stopPropagation(); onSelect('wire:' + key); }}>
           <path className="wire-hit" d={path} /><path className="wire-stroke" d={path} />
           {flowPath && <path className="wire-flow" d={flowPath} aria-hidden="true" />}
-        </g>;
+      </g>;
       })}
       {wirePreview && previewPath && <g className={'wire-preview ' + (wirePreview.target ? 'ready' : '')} aria-hidden="true" pointerEvents="none">
         <path d={previewPath} />
       </g>}
-    </g>
-    {game.placed.mcu && <g className={'board-mcu board-component ' + (selected === 'mcu' ? 'selected' : '')} role="button" tabIndex={0} aria-label="MCU 参数与操作"
+    </g>}
+    {abstract && level.abstract?.figure === 'kcl' && (() => {
+      const [na, nb] = level.abstract.boxes;
+      const top = na.y - 110, bottom = na.y + 110;
+      const midX = (na.x + nb.x) / 2;
+      return <g className="abstract-figure" transform="translate(450 300) scale(1.0) translate(-450 -350)">
+        <line className="wire-stroke abstract-conn" x1={na.x} y1={top} x2={nb.x} y2={top} />
+        <line className="wire-stroke abstract-conn" x1={na.x} y1={bottom} x2={nb.x} y2={bottom} />
+        {/* 中间电流源支路 */}
+        <line className="wire-stroke abstract-conn" x1={midX} y1={top} x2={midX} y2={(top+bottom)/2 - 16} />
+        <circle cx={midX} cy={(top+bottom)/2} r={16} className="abstract-box" />
+        <line x1={midX-12} y1={(top+bottom)/2} x2={midX+12} y2={(top+bottom)/2} stroke="#cdeee8" strokeWidth="2" />
+        <line className="wire-stroke abstract-conn" x1={midX} y1={(top+bottom)/2 + 16} x2={midX} y2={bottom} />
+        <path className="abstract-i-arrow" d={'M' + midX + ' ' + ((top+bottom)/2 + 30) + ' v18 M' + (midX-6) + ' ' + ((top+bottom)/2 + 42) + ' l6 7 6 -7'} />
+        <text className="ref-signs kcl-signs" x={midX + 14} y={(top+bottom)/2 + 44} textAnchor="start">I_S</text>
+        {/* U 极性 + 左（贴上线，+ 与 U 分开） */}
+        <text className="ref-polarity ref-polarity-big" x={na.x + 95} y={top + 22} textAnchor="middle">+</text>
+        <text className="ref-signs kcl-signs" x={na.x + 95} y={(top+bottom)/2 + 8} textAnchor="middle">U</text>
+        <text className="ref-polarity ref-polarity-big" x={na.x + 95} y={bottom - 14} textAnchor="middle">−</text>
+        {/* I1 箭头 左上段（高处） */}
+        <path className="abstract-i-arrow" d={'M' + (na.x + 120) + ' ' + top + ' h30 M' + (na.x + 145) + ' ' + (top-7) + ' l8 7 -8 7'} />
+        <text className="ref-signs kcl-signs" x={na.x + 135} y={top - 14} textAnchor="middle">I₁</text>
+        {[na, nb].map(bx => (
+          <g key={bx.id} transform={'translate(' + bx.x + ' ' + bx.y + ')'}>
+            <rect className="abstract-box kcl-box" x={-80} y={-110} width={160} height={220} rx={12} />
+            <text className="abstract-box-label kcl-box-label" x={0} y={8} textAnchor="middle">{bx.label}</text>
+            <circle cx={0} cy={-110} r={5} className="abstract-term" />
+            <circle cx={0} cy={110} r={5} className="abstract-term" />
+          </g>
+        ))}
+        <text className="kcl-signs kcl-values" x={230} y={bottom + 50} textAnchor="middle">I₁ = 500 mA</text>
+        <text className="kcl-signs kcl-values" x={450} y={bottom + 50} textAnchor="middle">U = 30 V</text>
+        <text className="kcl-signs kcl-values" x={670} y={bottom + 50} textAnchor="middle">I_S = 100 mA</text>
+      </g>;
+    })()}
+    {abstract && level.abstract?.boxes && level.abstract?.figure !== 'kcl' && (() => {
+      const [na, nb] = level.abstract.boxes;
+      const dir = game.iDir || 'right';
+      const top = na.y - 34, bottom = na.y + 34;
+      const mid = (na.x + nb.x) / 2;
+      return <g className="abstract-figure">
+        {/* standard connecting wires with flow animation */}
+        <line className="wire-stroke abstract-conn" x1={na.x} y1={top} x2={nb.x} y2={top} />
+        <line className="wire-stroke abstract-conn" x1={na.x} y1={bottom} x2={nb.x} y2={bottom} />
+        <line className="wire-flow" x1={dir === 'right' ? na.x + 10 : nb.x - 10} y1={top} x2={dir === 'right' ? nb.x - 10 : na.x + 10} y2={top} />
+        <line className="wire-flow" x1={dir === 'right' ? nb.x - 10 : na.x + 10} y1={bottom} x2={dir === 'right' ? na.x + 10 : nb.x - 10} y2={bottom} />
+        {/* u polarity: middle, inner side */}
+        <text className="ref-polarity" x={mid} y={top - 8} textAnchor="middle">+</text>
+        <text className="ref-signs" x={mid + 18} y={top - 8} textAnchor="middle">u</text>
+        <text className="ref-polarity" x={mid} y={bottom + 18} textAnchor="middle">−</text>
+        {/* i arrow on top rail, above +u to avoid overlap */}
+        <path className="abstract-i-arrow" d={dir === 'right'
+          ? 'M' + (mid - 34) + ' ' + (top - 26) + ' h26 M' + (mid - 10) + ' ' + (top - 32) + ' l7 6-7 6'
+          : 'M' + (mid + 34) + ' ' + (top - 26) + ' h-26 M' + (mid + 10) + ' ' + (top - 32) + ' l-7 6 7 6'} />
+        <text className="ref-signs" x={mid + (dir === 'right' ? -40 : 40)} y={top - 28} textAnchor="middle">i</text>
+        {/* boxes with terminals */}
+        {[na, nb].map(bx => (
+          <g key={bx.id} transform={'translate(' + bx.x + ' ' + bx.y + ')'}>
+            <rect className="abstract-box" x={-52} y={-38} width={104} height={76} rx={8} />
+            <text className="abstract-box-label" x={0} y={7} textAnchor="middle">{bx.label}</text>
+            <circle cx={0} cy={-38} r={4} className="abstract-term" />
+            <circle cx={0} cy={38} r={4} className="abstract-term" />
+          </g>
+        ))}
+      </g>;
+    })()}
+    {!abstract && game.placed.mcu && <g className={'board-mcu board-component ' + (selected === 'mcu' ? 'selected' : '')} role="button" tabIndex={0} aria-label="MCU 参数与操作"
       transform={'translate(' + (game.positions.mcu.x - 176) + ' ' + (game.positions.mcu.y - 337) + ')'}
       onPointerDown={event => startMove(event, 'mcu')} onKeyDown={event => keyboardSelect(event, 'mcu')}>
       <rect x="76" y="210" width="200" height="255" rx="9" />
@@ -279,15 +354,18 @@ export function CircuitBoard({ level, game, componentStates, currentPath, flowEd
       <Pin id="mcu.gpio" x={276} y={335} {...pinProps} />
       <Pin id="mcu.gnd" x={276} y={425} {...pinProps} />
     </g>}
-    {game.placed.power && <g className={'board-power board-component ' + (level.board.fixedParts?.includes('power') ? 'fixed ' : '') + (selected === 'power' ? 'selected' : '')} role="button" tabIndex={0} aria-label="电源参数与操作"
+    {!abstract && game.placed.power && <g className={'board-power board-component ' + (level.board.fixedParts?.includes('power') ? 'fixed ' : '') + (selected === 'power' ? 'selected' : '')} role="button" tabIndex={0} aria-label="电源参数与操作"
       transform={'translate(' + (game.positions.power.x - 379) + ' ' + (game.positions.power.y - 154) + ')'}
       onPointerDown={event => startMove(event, 'power')} onKeyDown={event => keyboardSelect(event, 'power')}>
-      <text x="379" y="91" textAnchor="middle">{(level.electrical.sourceV ?? level.electrical.gpioHighV).toFixed(1)} V</text>
-      <circle cx="379" cy="119" r="11" />
-      <path d="M379 130v24" />
+      {!judgeOnly && <text x="379" y="91" textAnchor="middle">{(level.electrical.sourceV ?? level.electrical.gpioHighV).toFixed(1)} V</text>}
+      {!judgeOnly && <><circle cx="379" cy="119" r="11" /><path d="M379 130v24" /></>}
+      {judgedElements.has('power') && !judgeOnly && <>
+        <text className="ref-tag" x="379" y="60" textAnchor="middle">电源</text>
+        <text className="ref-polarity" x="379" y="124" textAnchor="middle">+</text>
+      </>}
       <Pin id="power" x={379} y={154} {...pinProps} />
     </g>}
-    {game.placed.isource && <g className={'board-isource board-component ' + (componentStates.isource?.state || 'normal') + ' ' + (level.board.fixedParts?.includes('isource') ? 'fixed ' : '') + (selected === 'isource' ? 'selected' : '')} role="button" tabIndex={0} aria-label="电流源参数与操作"
+    {!abstract && game.placed.isource && <g className={'board-isource board-component ' + (componentStates.isource?.state || 'normal') + ' ' + (level.board.fixedParts?.includes('isource') ? 'fixed ' : '') + (selected === 'isource' ? 'selected' : '')} role="button" tabIndex={0} aria-label="电流源参数与操作"
       transform={'translate(' + game.positions.isource.x + ' ' + game.positions.isource.y + ')'}
       onPointerDown={event => startMove(event, 'isource')} onKeyDown={event => keyboardSelect(event, 'isource')}>
       <text className="value" x="0" y="-60" textAnchor="middle">{level.electrical.sourceCurrentMa.toFixed(1)} mA 恒定</text>
@@ -299,7 +377,7 @@ export function CircuitBoard({ level, game, componentStates, currentPath, flowEd
       <Pin id="isource.in" x={-55} y={0} {...pinProps} />
       <Pin id="isource.out" x={55} y={0} {...pinProps} />
     </g>}
-    {game.placed.vccs && <g className={'board-vccs board-component ' + (componentStates.vccs?.state || 'normal') + ' ' + (level.board.fixedParts?.includes('vccs') ? 'fixed ' : '') + (selected === 'vccs' ? 'selected' : '')} role="button" tabIndex={0} aria-label="压控电流源参数与操作"
+    {!abstract && game.placed.vccs && <g className={'board-vccs board-component ' + (componentStates.vccs?.state || 'normal') + ' ' + (level.board.fixedParts?.includes('vccs') ? 'fixed ' : '') + (selected === 'vccs' ? 'selected' : '')} role="button" tabIndex={0} aria-label="压控电流源参数与操作"
       transform={'translate(' + game.positions.vccs.x + ' ' + game.positions.vccs.y + ')'}
       onPointerDown={event => startMove(event, 'vccs')} onKeyDown={event => keyboardSelect(event, 'vccs')}>
       <text className="value" x="0" y="-58" textAnchor="middle">g·U控制 = {(game.controlledGmMs ?? level.electrical.controlledTransconductanceMs)} mS</text>
@@ -311,21 +389,21 @@ export function CircuitBoard({ level, game, componentStates, currentPath, flowEd
       <Pin id="vccs.in" x={-55} y={0} {...pinProps} />
       <Pin id="vccs.out" x={55} y={0} {...pinProps} />
     </g>}
-    {game.placed.ground && <g className={'board-ground board-component ' + (level.board.fixedParts?.includes('ground') ? 'fixed ' : '') + (selected === 'ground' ? 'selected' : '')} role="button" tabIndex={0} aria-label="GND 参数与操作"
+    {!abstract && game.placed.ground && <g className={'board-ground board-component ' + (level.board.fixedParts?.includes('ground') ? 'fixed ' : '') + (selected === 'ground' ? 'selected' : '')} role="button" tabIndex={0} aria-label="GND 参数与操作"
       transform={'translate(' + (game.positions.ground.x - 790) + ' ' + (game.positions.ground.y - 489) + ')'}
       onPointerDown={event => startMove(event, 'ground')} onKeyDown={event => keyboardSelect(event, 'ground')}>
-      <path d="M790 489v26 M765 515h50 M772 526h36 M780 537h20" />
-      <text x="790" y="575" textAnchor="middle">GND</text>
+      {!judgeOnly && <path d="M790 489v26 M765 515h50 M772 526h36 M780 537h20" />}
+      {!judgeOnly && <text x="790" y="575" textAnchor="middle">GND</text>}
       <Pin id="ground" x={790} y={489} {...pinProps} />
     </g>}
-    {game.placed.nodeA && <g className={'board-node-a board-component fixed ' + (selected === 'nodeA' ? 'selected' : '')} role="button" tabIndex={0} aria-label="节点 A，固定接线点"
+    {!abstract && game.placed.nodeA && <g className={'board-node-a board-component fixed ' + (selected === 'nodeA' ? 'selected' : '')} role="button" tabIndex={0} aria-label="节点 A，固定接线点"
       transform={'translate(' + game.positions.nodeA.x + ' ' + game.positions.nodeA.y + ')'}
       onPointerDown={event => startMove(event, 'nodeA')} onKeyDown={event => keyboardSelect(event, 'nodeA')}>
       <circle className="node-a-halo" r="26" />
       <text className="node-a-label" x="0" y="-35" textAnchor="middle">节点 A</text>
       <Pin id="nodeA" x={0} y={0} {...pinProps} />
     </g>}
-    {game.placed.nodeB && <g className={'board-node-a board-component fixed ' + (selected === 'nodeB' ? 'selected' : '')} role="button" tabIndex={0} aria-label="节点 B，固定接线点"
+    {!abstract && game.placed.nodeB && <g className={'board-node-a board-component fixed ' + (selected === 'nodeB' ? 'selected' : '')} role="button" tabIndex={0} aria-label="节点 B，固定接线点"
       transform={'translate(' + game.positions.nodeB.x + ' ' + game.positions.nodeB.y + ')'}
       onPointerDown={event => startMove(event, 'nodeB')} onKeyDown={event => keyboardSelect(event, 'nodeB')}>
       <circle className="node-a-halo" r="22" />
@@ -344,7 +422,7 @@ export function CircuitBoard({ level, game, componentStates, currentPath, flowEd
       <Pin id="resistor.a" x={-70} y={0} {...pinProps} />
       <Pin id="resistor.b" x={70} y={0} {...pinProps} />
     </g>}
-    {[...new Set([...(level.circuit.resistors || []), ...Object.keys(game.placed).filter(id => game.placed[id] && /^r\d+$/.test(id))])].map(id => {
+    {!abstract && [...new Set([...(level.circuit.resistors || []), ...Object.keys(game.placed).filter(id => game.placed[id] && /^r\d+$/.test(id))])].map(id => {
       if (!game.placed[id]) return null;
       const position = game.positions[id];
       const state = componentStates[id]?.state || 'normal';
@@ -354,16 +432,27 @@ export function CircuitBoard({ level, game, componentStates, currentPath, flowEd
         aria-label={id.toUpperCase() + ' 电阻参数与操作，' + (current > 0 ? '正在通电' : '未通电')}
         transform={'translate(' + position.x + ' ' + position.y + ')'}
         onPointerDown={event => startMove(event, id)} onKeyDown={event => keyboardSelect(event, id)}>
-        <text className="value" x="0" y="-39" textAnchor="middle">{id.toUpperCase()} · {game.resistorValues?.[id] ? game.resistorValues[id] + ' Ω' : '待选阻值'}{level.electrical.resistorRatingOptionsW ? ' · ' + ((game.resistorRatings?.[id] ?? level.electrical.resistorRatedPowerW) * 1000).toFixed(0) + ' mW' : ''}</text>
+        {!judgeOnly && <text className="value" x="0" y="-39" textAnchor="middle">{id.toUpperCase()} · {game.resistorValues?.[id] ? game.resistorValues[id] + ' Ω' : '待选阻值'}{level.electrical.resistorRatingOptionsW ? ' · ' + ((game.resistorRatings?.[id] ?? level.electrical.resistorRatedPowerW) * 1000).toFixed(0) + ' mW' : ''}</text>}
         <path className="lead" d="M-70 0h30 M40 0h30" />
-        <rect x="-40" y="-15" width="80" height="30" rx="7" />
-        <path className="bands" d="M-22-14v28 M-8-14v28 M9-14v28 M23-14v28" />
+        {judgeOnly
+          ? <rect className="abstract-box" x="-52" y="-32" width="104" height="64" rx="8" />
+          : <>
+              <rect x="-40" y="-15" width="80" height="30" rx="7" />
+              <path className="bands" d="M-22-14v28 M-8-14v28 M9-14v28 M23-14v28" />
+            </>}
         {state === 'conducting' && <path className="component-flow" d={direction === 'forward' ? 'M-39 0H39' : 'M39 0H-39'} aria-hidden="true" />}
+        {judgedElements.has(id) && <>
+          <text className="ref-tag" x="0" y="-58" textAnchor="middle">{judgeOnly ? '元件' : id.toUpperCase()}</text>
+          {!judgeOnly && <>
+            <text className="ref-polarity" x="-70" y="-22" textAnchor="middle">+</text>
+            <text className="ref-polarity" x="70" y="-22" textAnchor="middle">−</text>
+          </>}
+        </>}
         <Pin id={id + '.a'} x={-70} y={0} {...pinProps} />
         <Pin id={id + '.b'} x={70} y={0} {...pinProps} />
       </g>;
     })}
-    {game.placed.led && <g className={'board-component led ' + ledState + ' ' + (selected === 'led' ? 'selected' : '')} role="button" tabIndex={0} aria-label={'LED 参数与操作，' + (ledState === 'lit' ? '电流越大越亮' : ledState === 'burned' ? '过流失效' : '未点亮')}
+    {!abstract && game.placed.led && <g className={'board-component led ' + ledState + ' ' + (selected === 'led' ? 'selected' : '')} role="button" tabIndex={0} aria-label={'LED 参数与操作，' + (ledState === 'lit' ? '电流越大越亮' : ledState === 'burned' ? '过流失效' : '未点亮')}
       transform={'translate(' + led.x + ' ' + led.y + ')'} style={ledVisualStyle}
       onPointerDown={event => startMove(event, 'led')} onKeyDown={event => keyboardSelect(event, 'led')}>
       <circle className="led-ambient-glow" cx="-4" cy="0" r="47" aria-hidden="true" />
@@ -396,5 +485,34 @@ export function CircuitBoard({ level, game, componentStates, currentPath, flowEd
     {['gpio-short', 'supply-short', 'current-source-short'].includes(failureEffect) && <g className="board-spark" transform={'translate(' + (failureEffect === 'gpio-short' ? pinPosition(game, 'mcu.gpio').x + ' ' + pinPosition(game, 'mcu.gpio').y : failureEffect === 'current-source-short' ? game.positions.isource.x + ' ' + game.positions.isource.y : game.positions.power.x + ' ' + game.positions.power.y) + ')'} aria-hidden="true">
       <circle cx="0" cy="0" r="22" /><path d="M0-32v-12 M0 32v12 M-32 0h-12 M32 0h12 M-23-23l-9-9 M23 23l9 9" />
     </g>}
-  </svg>{menuPosition && <div ref={menuRef} className="board-menu-overlay" style={menuPosition}><PartParameterMenu key={selected} id={menuPart} level={level} game={game} componentState={componentStates[menuPart]} onChooseResistor={onChooseResistor} onFlipLed={onFlipLed} onRemove={level.board.fixedParts?.includes(menuPart) ? null : onRemoveSelected} onClose={() => onSelect(null)} onJudgePower={judgedElements.has(menuPart) ? onJudgePower : null} judgedPower={game.powerJudging?.[menuPart] || null} onTuneGain={onTuneGain} onChooseRating={onChooseRating} /></div>}</>;
+    {/* 电流参考方向 i 箭头：画在电源到第一只电阻的连线上（中点偏上）。 */}
+    {judgeOnly && !abstract && game.placed.power && game.positions.power && game.positions.r1 && (() => {
+      const from = game.positions.power;
+      const to = { x: game.positions.r1.x - 70, y: game.positions.r1.y };
+      const mx = (from.x + to.x) / 2;
+      const my = from.y;
+      const left = (game.iDir || 'right') === 'left';
+      return <g className="ref-current" aria-hidden="true">
+        <path className="ref-arrow" d={left
+          ? 'M' + (mx + 34) + ' ' + (my - 18) + ' h-60 M' + (mx - 20) + ' ' + (my - 25) + ' l-8 7 8 7'
+          : 'M' + (mx - 34) + ' ' + (my - 18) + ' h60 M' + (mx + 20) + ' ' + (my - 25) + ' l8 7-8 7'} />
+        <text className="ref-i" x={mx + 4} y={my - 23} textAnchor="middle">i</text>
+      </g>;
+    })()}
+    {/* 教材式端口极性：导线最左 +、最右 - */}
+    {judgeOnly && !abstract && game.positions.power && game.positions.ground && (() => {
+      const y = game.positions.power.y;
+      return <g aria-hidden="true">
+        <text className="ref-polarity ref-polarity-big" x={game.positions.power.x} y={y - 16} textAnchor="middle">+</text>
+        <text className="ref-polarity ref-polarity-big" x={game.positions.ground.x} y={y - 16} textAnchor="middle">−</text>
+        {level.randomSigns?.r1 && game.judgementSigns?.r1 && (() => {
+          const su = game.judgementSigns.r1.u, si = game.judgementSigns.r1.i;
+          return <>
+            <text className="ref-signs" x={game.positions.power.x} y={y - 38} textAnchor="middle">u={su > 0 ? '+' : '−'}{Math.abs(6)}V</text>
+            <text className="ref-signs" x={(game.positions.power.x + game.positions.r1.x - 70) / 2} y={y - 48} textAnchor="middle">i={si > 0 ? '+' : '−'}{Math.abs(2)}mA</text>
+          </>;
+        })()}
+      </g>;
+    })()}
+  </svg>{!judgeOnly && menuPosition && <div ref={menuRef} className="board-menu-overlay" style={menuPosition}><PartParameterMenu key={selected} id={menuPart} level={level} game={game} componentState={componentStates[menuPart]} onChooseResistor={onChooseResistor} onFlipLed={onFlipLed} onRemove={level.board.fixedParts?.includes(menuPart) ? null : onRemoveSelected} onClose={() => onSelect(null)} onJudgePower={judgedElements.has(menuPart) ? onJudgePower : null} judgedPower={game.powerJudging?.[menuPart] || null} onJudgeAssoc={judgedElements.has(menuPart) ? onJudgeAssoc : null} judgedAssoc={game.assocJudging?.[menuPart] || null} onJudgeUiMeaning={judgedElements.has(menuPart) ? onJudgeUiMeaning : null} judgedUiMeaning={game.uiMeaningJudging?.[menuPart] || null} onTuneGain={onTuneGain} onChooseRating={onChooseRating} /></div>}</>;
 }
